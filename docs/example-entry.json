@@ -1,0 +1,59 @@
+{
+  "_note": "Illustrative entry showing the finished schema. The labels are an example, not dataset labels, and the lede is a placeholder because collect.py fills it from the page.",
+  "id": "art-0001",
+  "url": "https://theprint.in/politics/after-delimitation-bill-fails-in-lok-sabha-modi-now-using-women-card-in-poll-bound-bengal/2909555/",
+  "url_archive": "",
+  "retrieved_at": "2026-10-10T09:30:00Z",
+  "published": "2026-04-20",
+  "outlet": "ThePrint",
+  "original_source": "Bloomberg",
+  "syndicated": true,
+  "article_type": "wire",
+  "event_id": "delimitation-bill-2026-04",
+  "title": "After delimitation bill fails in Lok Sabha, Modi now using women card in poll-bound Bengal",
+  "standfirst": "",
+  "lede": "<first two body paragraphs, up to 120 words, filled in by collect.py>",
+  "lede_status": "ok",
+  "guideline_version": "1.1",
+  "in_guideline": false,
+  "pilot": false,
+  "labels": {
+    "political": {
+      "label": "Left",
+      "confidence": "medium",
+      "rationale": "Headline frames the PM's rhetoric as opportunism, and the opening paragraph treats the failed bill as something he is exploiting.",
+      "spans": [
+        {
+          "field": "title",
+          "start": 59,
+          "end": 69,
+          "text": "women card"
+        }
+      ]
+    },
+    "gender": {
+      "label": "Neutral",
+      "confidence": "high",
+      "rationale": "Topic is women's representation, but nothing judges or generalizes about either gender.",
+      "spans": []
+    },
+    "communal_caste": {
+      "status": "not_applicable"
+    },
+    "cultural": {
+      "status": "not_applicable"
+    }
+  },
+  "annotator": "A1",
+  "overlap_set": false,
+  "split": "eval",
+  "meta": {
+    "feed": "manual",
+    "category": "",
+    "agency_hint": [
+      "Bloomberg"
+    ],
+    "lede_hash": "",
+    "canonical_url": "https://theprint.in/politics/after-delimitation-bill-fails-in-lok-sabha-modi-now-using-women-card-in-poll-bound-bengal/2909555"
+  }
+}
