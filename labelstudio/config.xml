@@ -1,0 +1,58 @@
+<View>
+  <Header value="Headline"/>
+  <Text name="title" value="$title"/>
+  <Labels name="title_spans" toName="title">
+    <Label value="political_evidence" background="#e76f51"/>
+    <Label value="gender_evidence" background="#2a9d8f"/>
+  </Labels>
+
+  <Header value="Opening paragraphs"/>
+  <Text name="lede" value="$lede"/>
+  <Labels name="lede_spans" toName="lede">
+    <Label value="political_evidence" background="#e76f51"/>
+    <Label value="gender_evidence" background="#2a9d8f"/>
+  </Labels>
+
+  <Header value="Article type"/>
+  <Choices name="article_type" toName="lede" choice="single" showInline="true" required="true">
+    <Choice value="news"/>
+    <Choice value="wire"/>
+    <Choice value="analysis"/>
+    <Choice value="opinion"/>
+  </Choices>
+
+  <Header value="Political ideology (Indian context)"/>
+  <Choices name="political" toName="lede" choice="single" showInline="true" required="true">
+    <Choice value="Left"/>
+    <Choice value="Center"/>
+    <Choice value="Right"/>
+  </Choices>
+  <Choices name="political_confidence" toName="lede" choice="single" showInline="true" required="true">
+    <Choice value="low"/>
+    <Choice value="medium"/>
+    <Choice value="high"/>
+  </Choices>
+  <TextArea name="political_rationale" toName="lede" rows="2" maxSubmissions="1" required="true"
+            placeholder="One line: the words or framing that drove the label"/>
+
+  <Header value="Gender bias"/>
+  <Choices name="gender" toName="lede" choice="single" showInline="true" required="true">
+    <Choice value="Misogynistic"/>
+    <Choice value="Misandrist"/>
+    <Choice value="Neutral"/>
+  </Choices>
+  <Choices name="gender_confidence" toName="lede" choice="single" showInline="true" required="true">
+    <Choice value="low"/>
+    <Choice value="medium"/>
+    <Choice value="high"/>
+  </Choices>
+  <TextArea name="gender_rationale" toName="lede" rows="2" maxSubmissions="1" required="true"
+            placeholder="One line: the words or framing that drove the label"/>
+
+  <Header value="Pilot batch only: standfirst (feed summary)"/>
+  <Text name="standfirst" value="$standfirst"/>
+  <Choices name="standfirst_sufficient" toName="standfirst" choice="single" showInline="true">
+    <Choice value="yes"/>
+    <Choice value="no"/>
+  </Choices>
+</View>
