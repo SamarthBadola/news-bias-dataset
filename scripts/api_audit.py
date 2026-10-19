@@ -52,6 +52,18 @@ TARGETS = {
     "Firstpost": "firstpost.com",
     "Deccan Herald": "deccanherald.com",
     "Business Standard": "business-standard.com",
+    "Times Now": "timesnownews.com",
+    "ABP News": "news.abplive.com",
+    "India TV": "indiatvnews.com",
+    "DNA India": "dnaindia.com",
+    "Oneindia": "oneindia.com",
+    "Free Press Journal": "freepressjournal.in",
+    "Telangana Today": "telanganatoday.com",
+    "Frontline": "frontline.thehindu.com",
+    "The Quint": "thequint.com",
+    "National Herald": "nationalheraldindia.com",
+    "Organiser": "organiser.org",
+    "TFIPOST": "tfipost.com",
 }
 TARGET_DOMAINS = set(TARGETS.values())
 BLOCKED_DOMAINS = {"news.google.com", "menafn.com", "einpresswire.com", "prnewswire.com",
@@ -111,9 +123,8 @@ def domain_of(url):
 
 
 def is_target(domain):
-    if domain.startswith("sports."):
-        return False
-    return any(domain == d or domain.endswith("." + d) for d in TARGET_DOMAINS)
+    """Exact host match, so food.ndtv.com and sports.ndtv.com are not treated as the news site."""
+    return domain in TARGET_DOMAINS
 
 
 def non_latin_share(text):
@@ -233,6 +244,9 @@ def fetch_worldnews(key, pages, query):
 
 
 _FETCHER = None
+_LAST_FEED_HIT = {}
+FEED_GAP = 1.0
+_sleep = time.sleep
 
 
 def get_feed_bytes(url):
@@ -240,10 +254,15 @@ def get_feed_bytes(url):
     global _FETCHER
     if _FETCHER is None:
         _FETCHER = safe_fetch.Fetcher()
+    host = domain_of(url)
+    wait = _LAST_FEED_HIT.get(host, 0) + FEED_GAP - time.monotonic()
+    if wait > 0:
+        _sleep(wait)
+    _LAST_FEED_HIT[host] = time.monotonic()
     res = _FETCHER.fetch(url, accept="application/rss+xml,application/atom+xml,application/xml;q=0.9,*/*;q=0.5",
                          require_html=False)
     if res.error:
-        print(f"  {res.error}" + (f" (HTTP {res.status})" if res.status else ""))
+        print(f"  {res.error}" + (f" (HTTP {res.status})" if res.status else "") + (f": {res.detail}" if res.detail else ""))
         return None
     return res.body
 
