@@ -345,3 +345,52 @@ def test_urls_file_skips_comments_and_blank_lines(tmp_path):
 def test_only_temporary_failures_are_retried(status, error, transient):
     http = int(error.split("_")[1]) if error.startswith("http_") else 0
     assert c.is_transient({"lede_status": status, "fetch_error": error, "http_status": http}) is transient
+
+
+# ---------- diagnostics and trial runs
+def test_interleave_round_robins_across_domains():
+    rows = [row(f"https://a.com/{i}") for i in range(3)] + [row(f"https://b.com/{i}") for i in range(2)] + [row("https://c.com/0")]
+    assert [r["domain"] for r in c.interleave(rows)] == ["a.com", "b.com", "c.com", "a.com", "b.com", "a.com"]
+
+
+def test_limit_trial_touches_several_outlets_not_just_the_first_feed(args, monkeypatch):
+    items = ([feed_item(f"https://www.thehindu.com/h{i}", f"Hindu {i}") for i in range(4)]
+             + [feed_item(f"https://www.ndtv.com/n{i}", f"NDTV {i}") for i in range(4)]
+             + [feed_item("https://scroll.in/s0", "Scroll 0")])
+    monkeypatch.setattr(aa, "fetch_rss", lambda path, limit=50: items)
+    fake = FakeFetcher({i["url"]: ok(i["url"], GOOD) for i in items})
+    args.limit = 3
+    assert {r["domain"] for r in c.run(args, c.Collector(fetcher=fake, delay=0))} == {"thehindu.com", "ndtv.com", "scroll.in"}
+
+
+def test_feed_stats_count_each_outcome_per_feed():
+    items = [feed_item("https://www.thehindu.com/a", "A", feed="Hindu"), feed_item("https://sports.ndtv.com/b", "B", feed="NDTV"),
+             feed_item("https://www.ndtv.com/c", "C", feed="NDTV"), feed_item("https://unknown.example/d", "D", feed="Mystery")]
+    stats = {}
+    c.new_rows(items, set(), set(), "2026-10-10T00:00:00Z", stats)
+    assert stats["Hindu"]["usable"] == 1 and stats["NDTV"]["sports"] == 1 and stats["NDTV"]["usable"] == 1
+    assert stats["Mystery"]["off_target"] == 1
+
+
+def test_feed_report_flags_feeds_with_nothing_usable_and_lists_off_target_domains(capsys):
+    items = [feed_item("https://unknown.example/d", "D", feed="Mystery"), feed_item("https://www.thehindu.com/a", "A", feed="Hindu")]
+    stats = {}
+    c.new_rows(items, set(), set(), "2026-10-10T00:00:00Z", stats)
+    c.print_feed_report(stats, items)
+    out = capsys.readouterr().out
+    assert "Mystery" in out and "check this feed" in out and "unknown.example: 1" in out
+    assert out.count("check this feed") == 1
+
+
+def test_dry_run_prints_the_feed_report(args, monkeypatch, capsys):
+    monkeypatch.setattr(aa, "fetch_rss", lambda path, limit=50: [feed_item("https://unknown.example/a", "A", feed="Mystery")])
+    args.no_fetch = True
+    c.run(args, c.Collector(fetcher=FakeFetcher(), delay=0))
+    out = capsys.readouterr().out
+    assert "per feed" in out and "Mystery" in out and "dry run" in out
+
+
+def test_fetch_failure_detail_is_stored_on_the_row():
+    pages = {"https://x.com/a": sf.Fetched("u", 0, error="network_error", detail="ConnectionResetError: reset by peer")}
+    r = collector(pages).process(row("https://x.com/a"))
+    assert r["fetch_error"] == "network_error" and "ConnectionResetError" in r["fetch_detail"]

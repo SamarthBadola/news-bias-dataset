@@ -211,6 +211,7 @@ class Collector:
         if res.error:
             row["lede_status"] = "fetch_failed"
             row["fetch_error"] = res.error
+            row["fetch_detail"] = res.detail
             blockish = res.status in (403, 429) or res.error in ("network_error", "too_large") or res.status >= 500
             self.failures[row["domain"]] = self.failures[row["domain"]] + 1 if blockish else 0
             return row
@@ -285,7 +286,8 @@ def load_seen(out_dir):
     return urls, titles
 
 
-def new_rows(items, seen_urls, seen_titles, now):
+def new_rows(items, seen_urls, seen_titles, now, stats=None):
+    """Rows worth fetching. If a dict is passed as stats it is filled with per-feed outcome counts."""
     rows, skipped = [], Counter()
     for it in items:
         reason = aa.reject_reason(it, need_snippet=False)
@@ -293,6 +295,8 @@ def new_rows(items, seen_urls, seen_titles, now):
         key = (it["domain"], norm_hash(it["title"]))
         if not reason and (cu in seen_urls or key in seen_titles):
             reason = "duplicate"
+        if stats is not None:
+            stats.setdefault(it["outlet"], Counter())[reason or "usable"] += 1
         if reason:
             skipped[reason] += 1
             continue
@@ -304,8 +308,35 @@ def new_rows(items, seen_urls, seen_titles, now):
             "published_utc": to_utc_iso(it["published"]), "retrieved_at": now, "title": it["title"],
             "standfirst": cap_words(it["snippet"], STANDFIRST_WORDS, STANDFIRST_MIN_KEEP),
             "lede": "", "lede_words": 0, "lede_status": "not_fetched", "http_status": None,
-            "fetch_error": "", "agency_hint": [], "lede_hash": "", "origin": "rss"})
+            "fetch_error": "", "fetch_detail": "", "agency_hint": [], "lede_hash": "", "origin": "rss"})
     return rows, skipped
+
+
+def interleave(rows):
+    """Round-robin across domains, so a small trial run touches many outlets instead of just the first feed."""
+    buckets = {}
+    for r in rows:
+        buckets.setdefault(r["domain"], []).append(r)
+    ordered = []
+    while any(buckets.values()):
+        for domain in buckets:
+            if buckets[domain]:
+                ordered.append(buckets[domain].pop(0))
+    return ordered
+
+
+def print_feed_report(stats, items):
+    print("\nper feed (items read, usable, rejected):")
+    for feed, counts in stats.items():
+        total = sum(counts.values())
+        rejected = {k: v for k, v in counts.items() if k != "usable"}
+        flag = "   <-- check this feed" if counts.get("usable", 0) == 0 else ""
+        print(f"  {feed:<32} {total:>3} read, {counts.get('usable', 0):>3} usable  {rejected or ''}{flag}")
+    off = Counter(it["domain"] for it in items if aa.reject_reason(it, need_snippet=False) == "off_target")
+    if off:
+        print("most common off-target domains (add an outlet to TARGETS in api_audit.py if one belongs):")
+        for domain, n in off.most_common(8):
+            print(f"  {domain}: {n}")
 
 
 def manual_rows(urls, seen_urls, now):
@@ -322,7 +353,7 @@ def manual_rows(urls, seen_urls, now):
             "type_hint": "opinion" if aa.OPINION_HINTS.search(urlparse(url).path) else "",
             "published_utc": "", "retrieved_at": now, "title": "", "standfirst": "",
             "lede": "", "lede_words": 0, "lede_status": "not_fetched", "http_status": None,
-            "fetch_error": "", "agency_hint": [], "lede_hash": "", "origin": "manual"})
+            "fetch_error": "", "fetch_detail": "", "agency_hint": [], "lede_hash": "", "origin": "manual"})
     return rows, skipped
 
 
@@ -344,13 +375,15 @@ def run(args, collector=None):
     else:
         print(f"reading feeds from {args.feeds}...")
         items = aa.fetch_rss(args.feeds, limit=args.max_per_feed)
-        rows, skipped = new_rows(items, seen_urls, seen_titles, now)
+        stats = {}
+        rows, skipped = new_rows(items, seen_urls, seen_titles, now, stats)
+        print_feed_report(stats, items)
     if args.no_fetch:
         print(f"\ndry run: {len(items)} items, {len(rows)} would be collected; nothing fetched or written")
         print("skipped before fetching:", dict(skipped))
         return []
     if args.limit:
-        rows = rows[:args.limit]
+        rows = interleave(rows)[:args.limit]
     collector = collector or Collector(delay=args.delay, max_failures=args.max_failures)
     out_path = out_dir / f"{datetime.now().strftime('%Y-%m-%d')}.jsonl"
     written, retry_later = [], []

@@ -48,14 +48,18 @@ pip install -r requirements-dev.txt
 python -m pytest                   # everything should pass before you start
 ```
 
-Install Label Studio in its own environment, because it brings many packages with it:
+Label Studio runs in Docker, so it needs no Python packages. Keep its data folder outside this repository so labels never end up in Git:
 
 ```bash
-python -m venv ls-venv
-source ls-venv/bin/activate        # on Windows: ls-venv\Scripts\activate
-pip install label-studio
-label-studio                       # opens http://localhost:8080
+docker pull heartexlabs/label-studio:latest
+docker run -it -p 8080:8080 -v "$HOME/ls-data:/label-studio/data" heartexlabs/label-studio:latest
 ```
+
+Then open http://localhost:8080 and create a local account. Press Ctrl+C to stop it. Run the same command later to continue where you left off, because your projects live in `ls-data`. In PowerShell the same command works with `${HOME}` in place of `$HOME`. If port 8080 is busy, use `-p 8081:8080` and open port 8081 instead. On Linux, a permission error on the data folder usually means the folder needs to be owned by the container's user (`sudo chown -R 1001:root ~/ls-data`).
+
+Docker only runs Label Studio. The Python scripts in this repository run on your own machine, in the virtual environment above. The two sides exchange files through your browser: you import a task file and export your labels.
+
+If you prefer no Docker, `pip install label-studio` in a separate virtual environment and run `label-studio` also works.
 
 The collector needs no API keys. Only `scripts/api_audit.py` reads keys, from a local `.env` file (copy `.env.example`). Never commit `.env`.
 
@@ -70,7 +74,9 @@ One person runs these. Having one person do it means two annotators never get th
 
 ```bash
 git pull
-python scripts/collect.py --limit 20            # first run: a small trial
+python scripts/collect.py --limit 20            # first run: a small trial across many outlets
+python scripts/inspect_raw.py --status ok --n 3 # read a few ledes before trusting the extraction
+python scripts/inspect_raw.py                   # counts per outlet, plus every row that is not ok
 python scripts/collect.py                       # full pull from rss_feeds.txt
 python scripts/collect.py --url https://example.com/a-story    # one article that is not in any feed
 python scripts/make_stubs.py --annotator A1 --n 40 --overlap 20 --pilot
@@ -83,7 +89,8 @@ git add data && git commit -m "data: add stubs for the pilot batch" && git push
 Notes on those commands:
 
 - `collect.py` reads robots.txt, spaces out its requests and retries temporary errors. It does not get around blocks or paywalls. A page it cannot read is saved with a status such as `robots_blocked` and is not annotated.
-- `--no-fetch` shows what a run would collect and writes nothing.
+- `--no-fetch` shows what a run would collect and writes nothing. It also prints a per-feed table. A feed marked `<-- check this feed` returned nothing usable, so look at the list of off-target domains printed below it. If an outlet in that list belongs in the dataset, add its domain to `TARGETS` in `scripts/api_audit.py`.
+- A feed that fails prints the reason, for example `network_error: ConnectionResetError`. Occasional failures are normal. A feed that fails every time usually means the site refuses automated clients. Leave such a site out instead of working around it.
 - `--split` sets where finished entries land in gold: `eval` (the default) or `fewshot`. Pilot batches always go to `pilot`.
 - `--pick URL` on `make_stubs.py` turns a specific collected article into a stub instead of sampling.
 - `--clone` copies the first annotator's overlap rows into the second annotator's file. Only the text and the article facts are copied, never any labels, so both of you label identical text. Run it right after the first annotator's stubs exist.
@@ -98,13 +105,13 @@ Replace `A1` with your own id throughout.
    ```bash
    python scripts/ls_tasks.py --stubs data/annotated/art_A1.jsonl --out labelstudio/A1_tasks.json
    ```
-3. **Set up Label Studio** (first time only). Start it, create a project, and open its labeling interface settings. Choose the code view and paste the contents of `labelstudio/config.xml`. Menu names can differ slightly between Label Studio versions.
+3. **Set up Label Studio** (first time only). Start the Docker container and open http://localhost:8080. Create a project, then in its labeling setup choose a custom template, open the code view and paste the contents of `labelstudio/config.xml`. Menu names can differ slightly between Label Studio versions.
 4. **Import** `labelstudio/A1_tasks.json` into the project.
 5. **Label each task.** Follow the guideline.
    - Highlight the words that drove your decision. Use `political_evidence` or `gender_evidence` depending on the axis.
    - Pick the article type, the label and a confidence for each axis, and write a one-line rationale.
    - On pilot items, also answer the standfirst question.
-6. **Export** from Label Studio in the full **JSON** format (not JSON-MIN or CSV) and save it as `labelstudio/A1_export.json`.
+6. **Export** from Label Studio in the full **JSON** format (not JSON-MIN or CSV). Your browser saves a file with a long generated name. Move it into the repo and rename it `labelstudio/A1_export.json`.
 7. **Bring the labels back into your file.**
    ```bash
    python scripts/ls_import.py --export labelstudio/A1_export.json --stubs data/annotated/art_A1.jsonl --comparative not_applicable
@@ -165,6 +172,7 @@ Use the conventional prefixes:
 | `'lede' differs between ...` | The two annotators' files hold different text for the same id. Do not edit either file. Ask the maintainer to run `--clone` again. |
 | `not promoted: ... waiting for the second annotator's file` | An overlap row. Pass both annotators' files to `validate.py`. |
 | `nothing promoted: fix the problems above first` | Promotion is all or nothing. Fix every listed problem and rerun. |
+| `lede_status: too_short` on many rows of one outlet | Often a paywall or a page of short briefs. Run `python scripts/inspect_raw.py --status too_short` and open one URL to see which. |
 | `trafilatura is not installed` | Run `pip install -r requirements.txt` inside your virtual environment. |
 
 ## Known gaps
