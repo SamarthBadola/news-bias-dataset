@@ -71,3 +71,46 @@ def test_reject_reason_order_and_snippet_toggle():
 
 def test_sports_subdomain_is_not_a_target_outlet():
     assert aa.is_target("ndtv.com") and not aa.is_target("sports.ndtv.com") and not aa.is_target("ndtvprofit.com")
+
+
+def test_is_target_uses_exact_hosts():
+    assert aa.is_target("ndtv.com") and aa.is_target("frontline.thehindu.com") and aa.is_target("thehindu.com")
+    assert not aa.is_target("food.ndtv.com") and not aa.is_target("sports.ndtv.com")
+    assert not aa.is_target("hindi.news18.com") and aa.is_target("news18.com")
+    assert aa.reject_reason(rec("https://food.ndtv.com/recipe/x")) == "off_target"
+
+
+def test_every_allowed_domain_is_a_clean_unique_host():
+    domains = list(aa.TARGETS.values())
+    assert len(domains) == len(set(domains))
+    assert all(d == d.lower() and not d.startswith("www.") and "/" not in d for d in domains)
+
+
+def test_feed_requests_to_the_same_host_are_spaced_out(monkeypatch):
+    import safe_fetch as sf
+
+    class Fake:
+        def fetch(self, url, **kw):
+            return sf.Fetched(url, 200, b"<rss/>", "", "application/xml", url)
+
+    naps = []
+    monkeypatch.setattr(aa, "_FETCHER", Fake())
+    monkeypatch.setattr(aa, "_LAST_FEED_HIT", {})
+    monkeypatch.setattr(aa, "_sleep", naps.append)
+    aa.get_feed_bytes("https://www.thehindu.com/a")
+    aa.get_feed_bytes("https://www.thehindu.com/b")
+    aa.get_feed_bytes("https://www.ndtv.com/c")
+    assert len(naps) == 1 and 0 < naps[0] <= aa.FEED_GAP
+
+
+def test_feed_failures_print_the_reason(monkeypatch, capsys):
+    import safe_fetch as sf
+
+    class Fake:
+        def fetch(self, url, **kw):
+            return sf.Fetched(url, 0, error="network_error", detail="ConnectionResetError: reset by peer")
+
+    monkeypatch.setattr(aa, "_FETCHER", Fake())
+    monkeypatch.setattr(aa, "_LAST_FEED_HIT", {})
+    assert aa.get_feed_bytes("https://theprint.in/feed/") is None
+    assert "network_error: ConnectionResetError: reset by peer" in capsys.readouterr().out

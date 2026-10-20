@@ -7,6 +7,9 @@
 #   WORKED    returned items in your audit run (samples.csv)
 #   LISTED    published in the FeedSpot Indian-news directory (checked 10 Oct 2026), not yet run by us
 #   PATTERN   inferred from the outlet's URL scheme or sibling feeds; most likely to need correcting
+# Dry run on 19 Oct 2026: every feed below returned items except the three ThePrint feeds, which failed with
+# network_error in both runs. India Today Home, India Today India and TFIPOST each failed once and worked in the
+# other run, so occasional network errors are normal. Delete a line only if it fails every time.
 # Delete any line that fails twice. Since the lede comes from the article page, an empty feed
 # description (Indian Express, some Times of India feeds) no longer matters.
 
@@ -40,7 +43,6 @@ India TV Top Stories | https://www.indiatvnews.com/rssnews/topstory.xml
 DNA India | https://www.dnaindia.com/feeds/india.xml
 Oneindia | https://www.oneindia.com/rss/news-india-fb.xml
 Free Press Journal | https://prod-qt-images.s3.amazonaws.com/production/freepressjournal/feed.xml
-Tribune India | https://www.tribuneindia.com/rss/feed?catId=42
 Telangana Today | https://telanganatoday.com/feed
 Frontline Cover Story | https://frontline.thehindu.com/cover-story/feeder/default.rss
 
@@ -49,7 +51,6 @@ Frontline Cover Story | https://frontline.thehindu.com/cover-story/feeder/defaul
 # source for each outlet (for example Media Bias Fact Check); I have not assigned any labels here.
 The Quint | https://prod-qt-images.s3.amazonaws.com/production/thequint/feed.xml
 National Herald | https://prod-qt-images.s3.amazonaws.com/production/nationalherald/feed.xml
-The News Minute | https://www.thenewsminute.com/rss.xml
 Organiser | https://organiser.org/feed/
 TFIPOST | https://tfipost.com/feed/
 
@@ -63,6 +64,8 @@ News18 Opinion | https://www.news18.com/commonfeeds/v1/eng/rss/opinion.xml
 Firstpost Politics | https://www.firstpost.com/commonfeeds/v1/mfp/rss/politics.xml
 
 # ---- REMOVED after the audit
+# Tribune India (https://www.tribuneindia.com/rss/feed?catId=42) answered 403 and The News Minute
+# (https://www.thenewsminute.com/rss.xml) answered 404 on 19 Oct 2026.
 # ThePrint All (https://theprint.in/feed/) and The Wire (https://thewire.in/feed) returned no rows. The directory lists
 # no working feed for The Wire or Republic World, and none for ANI or Deccan Herald; add them by hand if you find one.
 # Alt News (https://www.altnews.in/feed/) is a fact-checker: useful for the claim-retrieval side of the platform, not for bias labels.

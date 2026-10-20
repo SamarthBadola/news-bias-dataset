@@ -75,6 +75,7 @@ class Fetched:
     content_type: str = ""
     final_url: str = ""
     retry_after: float = 0.0
+    detail: str = ""
 
     @property
     def ok(self):
@@ -150,5 +151,6 @@ class Fetcher:
             else:
                 error = f"http_{e.code}"
             return Fetched(url, e.code, error=error, retry_after=_parse_retry_after(e.headers.get("Retry-After")))
-        except (URLError, TimeoutError, OSError):
-            return Fetched(url, error="network_error")
+        except (URLError, TimeoutError, OSError) as e:
+            reason = getattr(e, "reason", None) or e
+            return Fetched(url, error="network_error", detail=f"{type(reason).__name__}: {reason}"[:200])

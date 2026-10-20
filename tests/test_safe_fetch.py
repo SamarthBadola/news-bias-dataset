@@ -167,3 +167,14 @@ def test_redirect_to_file_scheme_is_blocked(server, fetcher):
 def test_loopback_is_blocked_without_the_test_override():
     assert sf.Fetcher(use_env_proxy=False).fetch("http://127.0.0.1/ok").error == "blocked_address"
     assert sf.Fetcher(use_env_proxy=False).fetch("http://localhost/ok").error == "blocked_address"
+
+
+def test_network_error_keeps_the_underlying_reason(fetcher):
+    import socket as s
+    probe = s.socket()
+    probe.bind(("127.0.0.1", 0))
+    port = probe.getsockname()[1]
+    probe.close()                                     # nothing is listening on this port now
+    res = fetcher.fetch(f"http://127.0.0.1:{port}/x")
+    assert res.error == "network_error" and "ConnectionRefusedError" in res.detail
+    assert fetcher.sleeps == [1.0, 3.0]               # it retried before giving up
