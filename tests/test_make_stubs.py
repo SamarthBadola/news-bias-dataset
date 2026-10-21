@@ -205,3 +205,97 @@ def test_raw_files_are_never_modified(tmp_path):
     before = (raw / "2026-10-10.jsonl").read_bytes()
     cli(tmp_path, "--annotator", "A1", "--n", "3", "--per-domain-cap", "0")
     assert (raw / "2026-10-10.jsonl").read_bytes() == before
+
+
+# ---------- same-event detection
+def word(i):
+    """A unique capitalised pseudo-word, so filler articles share no names."""
+    return "Q" + chr(97 + i % 26) + chr(97 + (i // 26) % 26) + chr(97 + (i // 676) % 26) + "x"
+
+
+def story(i, title, lede="officials said the matter is under review and more details will follow soon."):
+    r = raw_row(i)
+    r.update(title=title, lede=lede, lede_hash=f"story{i}")
+    return r
+
+
+def pool_with_tiger_group(filler=300):
+    tiger = [story(1, "Tiger Shroff attack: Juhu police probe three shooters"),
+             story(2, "Salman Khan security raised after Tiger Shroff firing in Juhu"),
+             story(3, "Cine workers body writes to Amit Shah over Tiger Shroff Juhu attack"),
+             story(4, "Actress Disha Patani visits Tiger Shroff after Juhu firing")]
+    fill_rows = [story(100 + i, f"{word(2 * i)} {word(2 * i + 1)} announces new plan") for i in range(filler)]
+    return tiger, fill_rows
+
+
+def test_guard_scores_same_event_far_above_unrelated_stories():
+    tiger, fillers = pool_with_tiger_group()
+    guard = ms.EventGuard(tiger + fillers, [], cap=2, threshold=12.0)
+    a, b, other = (ms.name_tokens(r) for r in (tiger[0], tiger[1], fillers[0]))
+    assert guard.score(a, b) >= 12 and guard.score(a, other) < 4
+    assert guard.shared(a, b) == ["juhu", "shroff", "tiger"]
+
+
+@pytest.mark.parametrize("cap,expected", [(1, 1), (2, 2), (0, 4)])
+def test_select_limits_stories_per_event(cap, expected):
+    tiger, fillers = pool_with_tiger_group()
+    rows = tiger + fillers
+    guard = ms.EventGuard(rows, [], cap=cap, threshold=12.0)
+    chosen = ms.select(rows, len(rows), 0, 0, set(), None, set(), set(), guard)
+    assert sum(r["title"] in {t["title"] for t in tiger} for r in chosen) == expected
+    assert len(chosen) == len(fillers) + expected
+
+
+def test_cap_counts_entries_that_already_exist(tmp_path):
+    tiger, fillers = pool_with_tiger_group()
+    write_raw(tmp_path, tiger + fillers)
+    existing = [ms.make_stub(tiger[0], "art-0001", "A1", False, False), ms.make_stub(tiger[1], "art-0002", "A1", False, False)]
+    (tmp_path / "annotated").mkdir()
+    (tmp_path / "annotated" / "art_A1.jsonl").write_text("\n".join(json.dumps(s) for s in existing) + "\n", encoding="utf-8")
+    stubs = cli(tmp_path, "--annotator", "A1", "--n", "400", "--per-domain-cap", "0")
+    titles = {s["title"] for s in stubs}
+    assert tiger[2]["title"] not in titles and tiger[3]["title"] not in titles and len(stubs) == len(fillers)
+
+
+def test_event_option_tags_stubs_and_respects_the_cap(tmp_path, capsys):
+    tiger, fillers = pool_with_tiger_group(filler=5)
+    write_raw(tmp_path, tiger + fillers)
+    urls = [t["canonical_url"] for t in tiger[:3]]
+    first = cli(tmp_path, "--annotator", "A1", "--event", "tiger-attack-2026-10",
+                *[x for u in urls for x in ("--pick", u)])
+    assert len(first) == 2 and {s["event_id"] for s in first} == {"tiger-attack-2026-10"}
+    assert "allows 2 more stories" in capsys.readouterr().out
+    again = cli(tmp_path, "--annotator", "A1", "--event", "tiger-attack-2026-10", "--pick", urls[2])
+    assert again == []
+
+
+def test_review_list_names_stories_that_look_alike(tmp_path, capsys):
+    tiger, fillers = pool_with_tiger_group()
+    write_raw(tmp_path, tiger + fillers)
+    cli(tmp_path, "--annotator", "A1", "--per-event-cap", "0", *[x for t in tiger[:2] for x in ("--pick", t["canonical_url"])])
+    out = capsys.readouterr().out
+    assert "look like the same story" in out and "art-0001 and art-0002" in out and "juhu, shroff, tiger" in out
+
+
+def test_review_list_also_compares_against_existing_entries(tmp_path, capsys):
+    tiger, fillers = pool_with_tiger_group()
+    write_raw(tmp_path, tiger + fillers)
+    cli(tmp_path, "--annotator", "A1", "--pick", tiger[0]["canonical_url"])
+    capsys.readouterr()
+    cli(tmp_path, "--annotator", "A1", "--pick", tiger[3]["canonical_url"])
+    assert "art-0002 and art-0001" in capsys.readouterr().out
+
+
+def test_unrelated_articles_produce_no_review_list(tmp_path, capsys):
+    tiger, fillers = pool_with_tiger_group()
+    write_raw(tmp_path, tiger + fillers)
+    cli(tmp_path, "--annotator", "A1", "--pick", tiger[0]["canonical_url"], "--pick", fillers[0]["canonical_url"])
+    assert "look like the same story" not in capsys.readouterr().out
+
+
+def test_articles_in_both_raw_and_annotated_are_counted_once_when_weighing_names():
+    tiger, fillers = pool_with_tiger_group()
+    taken = [ms.make_stub(tiger[0], "art-0001", "A1", False, False)]
+    once = ms.EventGuard(tiger + fillers, [], 2, 12.0)
+    twice = ms.EventGuard(tiger + fillers, taken, 2, 12.0)
+    assert once.n == twice.n and once.df["tiger"] == twice.df["tiger"] == 4

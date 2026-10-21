@@ -94,6 +94,8 @@ Notes on those commands:
 - `--split` sets where finished entries land in gold: `eval` (the default) or `fewshot`. Pilot batches always go to `pilot`.
 - `--pick URL` on `make_stubs.py` turns a specific collected article into a stub instead of sampling.
 - `--clone` copies the first annotator's overlap rows into the second annotator's file. Only the text and the article facts are copied, never any labels, so both of you label identical text. Run it right after the first annotator's stubs exist.
+- `make_stubs.py` limits how many stories about one event it samples (`--per-event-cap`, default 2, counting entries that already exist). It compares the names in headlines and opening paragraphs, and counts rarer names for more, so "Tiger Shroff" links stories while "Modi" alone does not. This is a review aid with a high threshold, not proof. After each run it lists pairs that look like the same story. Tag a deliberate group with `--event tiger-attack-2026-10`.
+- To remove a stub (a recipe page, a third story about one event) run `python scripts/drop_stubs.py art-0008`. It edits every file in `data/annotated/`, refuses an id that is already in gold, and needs no quoting, so it works the same in PowerShell, Git Bash and cmd. Ids are never reused, so a gap in the numbering is normal.
 - Pilot items (`--pilot`) also ask whether the standfirst alone would have given the same label. This tells us whether the platform can skip fetching article pages.
 
 ## The annotator's steps
@@ -151,6 +153,14 @@ The script promotes nothing unless there are zero problems. After that:
 
 `lede` is the first two body paragraphs after bylines and datelines are removed, cut to 120 words. `standfirst` is the feed's summary, cut to 40 words. Only entries with `lede_status` of `ok` are annotated. Other statuses mean the page gave no usable opening: `live_blog`, `too_short` (often a paywall), `fetch_failed`, `robots_blocked`, `extract_failed` or `domain_skipped`.
 
+## How duplicates are prevented
+
+| Where | What it catches |
+|---|---|
+| `collect.py` | An article already in `data/raw/` (same URL after removing `www`, trailing slashes, fragments and tracking parameters), or the same title from the same outlet |
+| `make_stubs.py` | An article that already has a stub or a gold entry, the same wire story on another outlet (same opening words), and more stories about one event than `--per-event-cap` allows |
+| `validate.py` | The same id or URL twice in a file, two ids for one article across annotator files and gold, and two ids with the same story text |
+
 ## Commit messages
 
 Use the conventional prefixes:
@@ -173,6 +183,9 @@ Use the conventional prefixes:
 | `not promoted: ... waiting for the second annotator's file` | An overlap row. Pass both annotators' files to `validate.py`. |
 | `nothing promoted: fix the problems above first` | Promotion is all or nothing. Fix every listed problem and rerun. |
 | `lede_status: too_short` on many rows of one outlet | Often a paywall or a page of short briefs. Run `python scripts/inspect_raw.py --status too_short` and open one URL to see which. |
+| `... are the same article URL` | Two different ids point at one article (links that differ only by tracking parameters count as the same). Keep one with `drop_stubs.py`. |
+| `... are the same story text` | Two entries have the same opening words, which usually means one wire story on two outlets. Keep one. |
+| A multi-line command pasted into PowerShell fails | PowerShell does not accept bash-style `<<EOF` blocks. Use the scripts in `scripts/`; they take plain arguments. |
 | `trafilatura is not installed` | Run `pip install -r requirements.txt` inside your virtual environment. |
 
 ## Known gaps

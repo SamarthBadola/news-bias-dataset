@@ -5,7 +5,9 @@
 
 Checks per row: valid JSON, required fields, no <placeholder> left anywhere, allowed label values,
 rationales, span offsets, duplicate ids and URLs, leakage guards. Across files: an id must carry the same
-url, title, standfirst and lede for every annotator, so both annotators label identical input.
+url, title, standfirst and lede for every annotator, so both annotators label identical input, and two
+different ids must never point at the same article (compared after removing tracking parameters) or the
+same story text, in the annotated files or in gold.
 
 --promote copies entries into data/gold/<split>.jsonl, where <split> is the entry's own `split` field
 (eval, fewshot or pilot). It runs only when there are zero validation problems, and then:
@@ -22,6 +24,8 @@ import re
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
+
+from urlnorm import canonical
 
 REQUIRED = ["id", "url", "url_archive", "retrieved_at", "published", "outlet",
             "syndicated", "article_type", "event_id", "title", "standfirst", "lede",
@@ -148,9 +152,12 @@ def load(path):
     ids, urls = {}, {}
     for n, row in rows:
         for seen, key in ((ids, "id"), (urls, "url")):
-            if row.get(key) in seen:
-                problems.append(f"{path} line {n}: duplicate {key} '{row.get(key)}' (also line {seen[row[key]]})")
-            seen[row.get(key)] = n
+            value = row.get(key)
+            if key == "url" and isinstance(value, str):
+                value = canonical(value)        # tracking parameters, www and trailing slashes do not make a new article
+            if value in seen:
+                problems.append(f"{path} line {n}: duplicate {key} '{row.get(key)}' (also line {seen[value]})")
+            seen[value] = n
     return [r for _, r in rows], problems
 
 
@@ -241,11 +248,35 @@ def promote(by_id, gold_dir):
     return {"written": written, "notices": notices, "errors": [], "skipped": skipped}
 
 
+def cross_checks(by_id, gold_dir):
+    """Different ids that point at the same article or the same story text, across annotator files and gold."""
+    problems, url_owner, text_owner = [], {}, {}
+
+    def note(owner, key, rid, where, label):
+        if not key:
+            return
+        if key in owner and owner[key][0] != rid:
+            problems.append(f"{rid} ({where}) and {owner[key][0]} ({owner[key][1]}) are the same {label}")
+        else:
+            owner.setdefault(key, (rid, where))
+
+    gold = read_gold(gold_dir) if Path(gold_dir).is_dir() else {}
+    for rid, row in gold.items():
+        note(url_owner, canonical(row["url"]) if row.get("url") else "", rid, "gold", "article URL")
+        note(text_owner, (row.get("meta") or {}).get("lede_hash", ""), rid, "gold", "story text")
+    for rid, versions in by_id.items():
+        path, row = versions[0]
+        where = Path(path).name
+        note(url_owner, canonical(row["url"]) if isinstance(row.get("url"), str) else "", rid, where, "article URL")
+        note(text_owner, (row.get("meta") or {}).get("lede_hash", ""), rid, where, "story text (same opening words)")
+    return problems
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("files", nargs="+", help="annotated JSONL files (give both annotators' files for overlap rows)")
     ap.add_argument("--promote", action="store_true", help="copy finished entries into <gold-dir>/<split>.jsonl")
-    ap.add_argument("--gold-dir", default="data/gold")
+    ap.add_argument("--gold-dir", default="data/gold", help="also used to catch an article that is already in gold")
     args = ap.parse_args(argv)
 
     problems, by_id = [], {}
@@ -260,6 +291,7 @@ def main(argv=None):
             for key in SHARED:
                 if row.get(key) != base.get(key):
                     problems.append(f"{rid}: '{key}' differs between {base_path} and {path}")
+    problems += cross_checks(by_id, args.gold_dir)
     for p in problems:
         print(p)
     print(f"{sum(len(v) for v in by_id.values())} rows in {len(args.files)} file(s), {len(problems)} problems")

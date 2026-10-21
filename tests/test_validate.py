@@ -5,6 +5,13 @@ import pytest
 
 import validate as v
 
+
+@pytest.fixture(autouse=True)
+def _isolated_cwd(tmp_path, monkeypatch):
+    """Default paths such as data/gold must never point at the real repository data."""
+    monkeypatch.chdir(tmp_path)
+
+
 LEDE = ("Narendra Modi is not letting his failed bid to overhaul parliament go to waste as he turns the "
         "defeat into a campaign pitch in a state that votes on Thursday.")
 
@@ -154,3 +161,75 @@ def test_docs_example_has_every_required_field_and_only_the_lede_is_a_placeholde
     row = json.loads(path.read_text(encoding="utf-8"))
     assert not [k for k in v.REQUIRED if k not in row and k != "annotator"]
     assert set(v.find_placeholders(row)) == {"lede"}
+
+
+# ---------- duplicate articles
+def test_tracking_parameters_do_not_make_a_new_article(tmp_path):
+    p = tmp_path / "a.jsonl"
+    other = base_row()
+    other.update(id="art-0002", url="https://www.theprint.in/x/?utm_source=a#top")
+    write(p, [base_row(), other])
+    _, problems = v.load(str(p))
+    assert any("duplicate url" in x for x in problems)
+
+
+def test_same_article_under_two_ids_in_different_files_is_flagged(tmp_path, capsys):
+    a1, a2 = tmp_path / "art_A1.jsonl", tmp_path / "art_A2.jsonl"
+    write(a1, [base_row()])
+    other = base_row()
+    other.update(id="art-0002", annotator="A2", url="https://theprint.in/x?utm_medium=y")
+    write(a2, [other])
+    with pytest.raises(SystemExit) as exc:
+        v.main([str(a1), str(a2)])
+    out = capsys.readouterr().out
+    assert exc.value.code == 1 and "art-0002 (art_A2.jsonl) and art-0001 (art_A1.jsonl) are the same article URL" in out
+
+
+def test_same_id_in_two_annotator_files_is_not_a_duplicate(tmp_path, capsys):
+    a1, a2 = tmp_path / "art_A1.jsonl", tmp_path / "art_A2.jsonl"
+    write(a1, [base_row()])
+    second = base_row()
+    second["annotator"] = "A2"
+    write(a2, [second])
+    with pytest.raises(SystemExit) as exc:
+        v.main([str(a1), str(a2)])
+    assert exc.value.code == 0 and "0 problems" in capsys.readouterr().out
+
+
+def test_an_article_already_in_gold_cannot_come_back_under_a_new_id(tmp_path, capsys):
+    gold = tmp_path / "gold"
+    gold.mkdir()
+    done = base_row()
+    done.pop("annotator")
+    (gold / "eval.jsonl").write_text(json.dumps(done) + "\n", encoding="utf-8")
+    a1 = tmp_path / "art_A1.jsonl"
+    again = base_row()
+    again["id"] = "art-0009"
+    write(a1, [again])
+    with pytest.raises(SystemExit) as exc:
+        v.main([str(a1), "--gold-dir", str(gold)])
+    assert exc.value.code == 1 and "art-0009 (art_A1.jsonl) and art-0001 (gold) are the same article URL" in capsys.readouterr().out
+
+
+def test_an_entry_already_promoted_under_the_same_id_is_fine(tmp_path, capsys):
+    gold = tmp_path / "gold"
+    gold.mkdir()
+    done = base_row()
+    done.pop("annotator")
+    (gold / "eval.jsonl").write_text(json.dumps(done) + "\n", encoding="utf-8")
+    a1 = tmp_path / "art_A1.jsonl"
+    write(a1, [base_row()])
+    with pytest.raises(SystemExit) as exc:
+        v.main([str(a1), "--gold-dir", str(gold)])
+    assert exc.value.code == 0
+
+
+def test_same_story_text_under_two_ids_is_flagged(tmp_path, capsys):
+    a1 = tmp_path / "art_A1.jsonl"
+    one, two = base_row(), base_row()
+    one["meta"] = {"lede_hash": "abc123"}
+    two.update(id="art-0002", url="https://scroll.in/other", meta={"lede_hash": "abc123"})
+    write(a1, [one, two])
+    with pytest.raises(SystemExit) as exc:
+        v.main([str(a1)])
+    assert exc.value.code == 1 and "same story text" in capsys.readouterr().out
