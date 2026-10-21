@@ -16,13 +16,15 @@ annotators label identical input.
 import argparse
 import copy
 import json
+import math
 import random
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 import api_audit as aa
-from collect import canonical
+from urlnorm import canonical
 
 GUIDELINE_VERSION = "1.1"
 DOMAIN_NAMES = {domain: name for name, domain in aa.TARGETS.items()}
@@ -38,6 +40,43 @@ def empty_labels():
         "communal_caste": {"status": "<labeled|no_bundle|not_applicable>"},
         "cultural": {"status": "<labeled|no_bundle|not_applicable>"},
     }
+
+
+FUNCTION_WORDS = set("""the for and with from over after before into about than this that day days oct pti ani ians monday
+tuesday wednesday thursday friday saturday sunday january february march april june july august september october
+november december also says said will what when where which while amid live news updates update video photos watch
+latest today here how why who not new top best big all one two three four five""".split())
+
+
+def name_tokens(row):
+    """Capitalised words in the headline and the first 40 words of the lede."""
+    text = row["title"] + " " + " ".join(row["lede"].split()[:40])
+    return {w.lower() for w in re.findall(r"\b[A-Z][a-zA-Z]{2,}\b", text)} - FUNCTION_WORDS
+
+
+class EventGuard:
+    """Spots articles that look like the same story. Names shared by two articles count for more the rarer
+    they are in the pool, so 'Tiger Shroff' and 'Juhu' link stories while 'Modi' alone does not. This is a
+    review aid with a deliberately high threshold, not proof: calibrated on real pilot data, every same-event
+    pair scored 13 or more and every unrelated pair scored below 4."""
+
+    def __init__(self, pool, taken, cap=2, threshold=12.0):
+        unique = {}                                   # an article in both raw and annotated counts once
+        for r in list(pool) + list(taken):
+            unique[canonical(r["url"])] = name_tokens(r)
+        self.df = Counter(t for tokens in unique.values() for t in tokens)
+        self.n = max(len(unique), 1)
+        self.cap, self.threshold = cap, threshold
+        self.taken = [(r.get("id", "taken"), name_tokens(r)) for r in taken]
+
+    def score(self, a, b):
+        return sum(math.log(self.n / self.df[t]) for t in a & b if self.df[t])
+
+    def similar(self, tokens, others):
+        return [oid for oid, other in others if self.score(tokens, other) >= self.threshold]
+
+    def shared(self, a, b):
+        return sorted(a & b)
 
 
 def read_jsonl(path):
@@ -64,31 +103,37 @@ def read_raw(raw_dir):
 
 def scan_taken(*dirs):
     """Highest art id used, plus the URLs and lede hashes already taken, across annotated and gold files."""
-    top, urls, hashes = 0, set(), set()
+    top, urls, hashes, rows = 0, set(), set(), []
     for d in dirs:
         for path in sorted(Path(d).glob("*.jsonl")):
             for row in read_jsonl(path):
+                rows.append(row)
                 m = re.fullmatch(r"art-(\d{4})", str(row.get("id", "")))
                 top = max(top, int(m.group(1))) if m else top
                 urls.add(canonical(row["url"]) if row.get("url") else "")
                 hashes.add((row.get("meta") or {}).get("lede_hash", ""))
-    return top, urls, hashes - {""}
+    return top, urls, hashes - {""}, rows
 
 
-def select(rows, n, seed, domain_cap, domains, since, taken_urls, taken_hashes):
+def select(rows, n, seed, domain_cap, domains, since, taken_urls, taken_hashes, guard=None):
     pool = [r for r in rows if r.get("lede_status") == "ok" and r.get("lede")]
     if domains:
         pool = [r for r in pool if r["domain"] in domains]
     if since:
         pool = [r for r in pool if (r.get("published_utc") or "")[:10] >= since]
     random.Random(seed).shuffle(pool)
-    chosen, per_domain, hashes = [], {}, set(taken_hashes)
+    chosen, per_domain, hashes, chosen_tokens = [], {}, set(taken_hashes), []
     for r in pool:
         cu = r.get("canonical_url") or canonical(r["url"])
         if cu in taken_urls or (r.get("lede_hash") and r["lede_hash"] in hashes):
             continue
         if domain_cap and per_domain.get(r["domain"], 0) >= domain_cap:
             continue
+        tokens = name_tokens(r) if guard else None
+        if guard and guard.cap and len(guard.similar(tokens, guard.taken + chosen_tokens)) >= guard.cap:
+            continue                                  # this event already has as many stories as allowed
+        if guard:
+            chosen_tokens.append((f"pending-{len(chosen) + 1}", tokens))
         chosen.append(r)
         per_domain[r["domain"]] = per_domain.get(r["domain"], 0) + 1
         hashes.add(r.get("lede_hash", ""))
@@ -113,6 +158,17 @@ def pick(rows, urls, taken_urls):
         else:
             chosen.append(row)
     return chosen
+
+
+def story_groups(stubs, taken, guard):
+    """Pairs where at least one article is new and the two look like the same story."""
+    everyone = [(s["id"], name_tokens(s), True) for s in stubs] + [(t.get("id", "?"), name_tokens(t), False) for t in taken]
+    found = []
+    for i, (ida, a, new_a) in enumerate(everyone):
+        for idb, b, new_b in everyone[i + 1:]:
+            if (new_a or new_b) and guard.score(a, b) >= guard.threshold:
+                found.append((ida, idb, guard.shared(a, b)))
+    return found
 
 
 def syndication_fields(agency_hint):
@@ -191,6 +247,10 @@ def main(argv=None):
     ap.add_argument("--domain", action="append", help="only sample these domains (repeatable)")
     ap.add_argument("--since", help="only articles published on or after YYYY-MM-DD")
     ap.add_argument("--per-domain-cap", type=int, default=5, help="max sampled per outlet in one run (0 = no cap)")
+    ap.add_argument("--per-event-cap", type=int, default=2,
+                    help="most stories about one event, counting entries already made (0 = no cap)")
+    ap.add_argument("--event-threshold", type=float, default=12.0, help="how alike two stories must be to count as one event")
+    ap.add_argument("--event", help="event_id to record on every stub from this run, e.g. tiger-shroff-attack-2026-10")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--raw-dir", default="data/raw")
     ap.add_argument("--annotated-dir", default="data/annotated")
@@ -210,19 +270,35 @@ def main(argv=None):
             print("no new overlap rows to clone")
             return []
     else:
-        top, taken_urls, taken_hashes = scan_taken(args.annotated_dir, args.gold_dir)
+        top, taken_urls, taken_hashes, taken_rows = scan_taken(args.annotated_dir, args.gold_dir)
         rows = read_raw(args.raw_dir)
+        guard = EventGuard(rows, taken_rows, args.per_event_cap, args.event_threshold)
         if args.pick:
             picked = pick(rows, args.pick, taken_urls)
         else:
             picked = select(rows, args.n, args.seed, args.per_domain_cap, set(args.domain or []),
-                            args.since, taken_urls, taken_hashes)
+                            args.since, taken_urls, taken_hashes, guard)
             if len(picked) < args.n:
                 print(f"only {len(picked)} eligible articles found (asked for {args.n}); collect more or relax the filters")
+        if args.event and args.per_event_cap:
+            room = args.per_event_cap - sum(1 for t in taken_rows if t.get("event_id") == args.event)
+            if room < len(picked):
+                print(f"event '{args.event}' allows {max(room, 0)} more stories (cap {args.per_event_cap}); skipping the rest")
+                picked = picked[:max(room, 0)]
         stubs = [make_stub(r, f"art-{top + i:04d}", args.annotator, args.pilot, i <= args.overlap, split=args.split)
                  for i, r in enumerate(picked, 1)]
+        if args.event:
+            for s in stubs:
+                s["event_id"] = args.event
     append_jsonl(out_path, stubs)
     print(f"wrote {len(stubs)} stubs to {out_path}")
+    if not args.clone and stubs:
+        groups = story_groups(stubs, taken_rows, guard)
+        if groups:
+            print("these look like the same story; keep them only if that is deliberate "
+                  "(drop one with scripts/drop_stubs.py, or tag the group with --event):")
+            for a, b, shared in groups:
+                print(f"  {a} and {b}  (shared names: {', '.join(shared)})")
     for s in stubs[:3]:
         print(f"  {s['id']}  {s['outlet']:<18} {s['title'][:70]}")
     return stubs

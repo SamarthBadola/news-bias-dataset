@@ -7,6 +7,12 @@ import validate as v
 from test_validate import base_row, write
 
 
+@pytest.fixture(autouse=True)
+def _isolated_cwd(tmp_path, monkeypatch):
+    """Default paths such as data/gold must never point at the real repository data."""
+    monkeypatch.chdir(tmp_path)
+
+
 def row(rid="art-0001", annotator="A1", **changes):
     r = base_row()
     r.update(id=rid, url=f"https://theprint.in/{rid}", annotator=annotator, **changes)

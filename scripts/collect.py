@@ -32,11 +32,12 @@ from collections import Counter
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
 import api_audit as aa
 import safe_fetch as sf
+from urlnorm import canonical
 
 LEDE_WORDS, LEDE_MIN_KEEP, LEDE_PARAS = 120, 60, 2
 STANDFIRST_WORDS, STANDFIRST_MIN_KEEP = 40, 15
@@ -59,7 +60,6 @@ DATELINES = [
 AGENCIES = re.compile(r"\b(Bloomberg|Reuters|PTI|ANI|IANS|AFP|UNI)\b")
 LIVE_URL = re.compile(r"live[ -]?(updates?|blog)|/live-", re.I)
 LIVE_TITLE = re.compile(r"^\s*live\s*(?:updates?|blog|coverage|:|\||[-–—]\s)", re.I)
-TRACKING = re.compile(r"^(utm_.*|fbclid|gclid|igshid|ref|ito|cmpid|mc_cid|mc_eid)$", re.I)
 
 
 def to_utc_iso(value):
@@ -126,14 +126,6 @@ def norm_hash(text, max_words=None):
     if max_words:
         words = words[:max_words]
     return hashlib.sha1(" ".join(words).encode()).hexdigest()[:16]
-
-
-def canonical(url):
-    p = urlparse(url)
-    host = p.netloc.lower()
-    host = host[4:] if host.startswith("www.") else host
-    query = urlencode(sorted((k, v) for k, v in parse_qsl(p.query) if not TRACKING.match(k)))
-    return urlunparse((p.scheme, host, p.path.rstrip("/"), "", query, ""))
 
 
 def is_live(url, title):
