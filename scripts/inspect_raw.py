@@ -17,6 +17,15 @@ def summarize(rows):
     return table
 
 
+def summarize_feeds(rows):
+    """Count extraction outcomes by configured source feed, not only by article host."""
+    table = {}
+    for row in rows:
+        feed = row.get("feed") or row.get("domain", "unknown")
+        table.setdefault(feed, Counter())[row.get("lede_status", "?")] += 1
+    return table
+
+
 def select_rows(rows, status, n):
     wanted = [r for r in rows if (r.get("lede_status") == status if status else r.get("lede_status") != "ok")]
     shown, per_group = [], Counter()
@@ -38,6 +47,9 @@ def main(argv=None):
     print(f"{len(rows)} rows in {args.raw_dir}\n")
     for domain, counts in sorted(summarize(rows).items()):
         print(f"  {domain:<34} {dict(counts)}")
+    print("\nby source feed:")
+    for feed, counts in sorted(summarize_feeds(rows).items()):
+        print(f"  {feed:<34} {dict(counts)}")
     shown = select_rows(rows, args.status, args.n)
     label = args.status or "not ok"
     print(f"\nrows with status {label} ({len(shown)} shown, up to {args.n} per outlet and status):")

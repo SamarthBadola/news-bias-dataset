@@ -70,13 +70,13 @@ The collector needs no API keys. Only `scripts/api_audit.py` reads keys, from a 
 
 ## The maintainer's steps
 
-One person runs these. Having one person do it means two annotators never get the same entry id.
+One person runs these. Having one person do it means two annotators never get the same entry id. For candidate pool coverage and class-balance guidance, see [`docs/data-inflow.md`](docs/data-inflow.md).
 
 ```bash
 git pull
-python scripts/collect.py --limit 20            # first run: a small trial across many outlets
+python scripts/collect.py --limit 60            # first pool: a small round-robin trial across source feeds
 python scripts/inspect_raw.py --status ok --n 3 # read a few ledes before trusting the extraction
-python scripts/inspect_raw.py                   # counts per outlet, plus every row that is not ok
+python scripts/inspect_raw.py                   # counts per host and source feed, plus every row that is not ok
 python scripts/collect.py                       # full pull from rss_feeds.txt
 python scripts/collect.py --url https://example.com/a-story    # one article that is not in any feed
 python scripts/make_stubs.py --annotator A1 --n 40 --overlap 20 --pilot
@@ -89,7 +89,7 @@ git add data && git commit -m "data: add stubs for the pilot batch" && git push
 Notes on those commands:
 
 - `collect.py` reads robots.txt, spaces out its requests and retries temporary errors. It does not get around blocks or paywalls. A page it cannot read is saved with a status such as `robots_blocked` and is not annotated.
-- `--no-fetch` shows what a run would collect and writes nothing. It also prints a per-feed table. A feed marked `<-- check this feed` returned nothing usable, so look at the list of off-target domains printed below it. If an outlet in that list belongs in the dataset, add its domain to `TARGETS` in `scripts/api_audit.py`.
+- `--no-fetch` shows what a run would collect and writes nothing. It applies `--limit` and prints the per-feed funnel. A feed marked `<-- check this feed` returned nothing usable, so look at the list of off-target domains printed below it. If an outlet in that list belongs in the dataset, add its domain to `TARGETS` in `scripts/api_audit.py`.
 - A feed that fails prints the reason, for example `network_error: ConnectionResetError`. Occasional failures are normal. A feed that fails every time usually means the site refuses automated clients. Leave such a site out instead of working around it.
 - `--split` sets where finished entries land in gold: `eval` (the default) or `fewshot`. Pilot batches always go to `pilot`.
 - `--pick URL` on `make_stubs.py` turns a specific collected article into a stub instead of sampling.
