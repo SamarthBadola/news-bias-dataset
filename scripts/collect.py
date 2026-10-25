@@ -305,10 +305,11 @@ def new_rows(items, seen_urls, seen_titles, now, stats=None):
 
 
 def interleave(rows):
-    """Round-robin across domains, so a small trial run touches many outlets instead of just the first feed."""
+    """Round-robin across source feeds and domains so trials cover more sources and sections."""
     buckets = {}
     for r in rows:
-        buckets.setdefault(r["domain"], []).append(r)
+        key = (r.get("feed") or r["domain"], r["domain"])
+        buckets.setdefault(key, []).append(r)
     ordered = []
     while any(buckets.values()):
         for domain in buckets:
@@ -317,13 +318,23 @@ def interleave(rows):
     return ordered
 
 
-def print_feed_report(stats, items):
-    print("\nper feed (items read, usable, rejected):")
-    for feed, counts in stats.items():
+def print_feed_report(stats, items, selected=None, results=None):
+    """Show the per-feed funnel from RSS item through selection and page extraction."""
+    selected_counts = Counter(r.get("feed", "manual") for r in (selected or []))
+    outcomes = {}
+    for row in results or []:
+        outcomes.setdefault(row.get("feed", "manual"), Counter())[row.get("lede_status", "?")] += 1
+    feeds = list(dict.fromkeys([*stats, *selected_counts, *outcomes]))
+    print("\nper feed (read, eligible, selected, fetched outcomes):")
+    for feed in feeds:
+        counts = stats.get(feed, Counter())
         total = sum(counts.values())
         rejected = {k: v for k, v in counts.items() if k != "usable"}
-        flag = "   <-- check this feed" if counts.get("usable", 0) == 0 else ""
-        print(f"  {feed:<32} {total:>3} read, {counts.get('usable', 0):>3} usable  {rejected or ''}{flag}")
+        eligible = counts.get("usable", 0)
+        flag = "   <-- check this feed" if eligible == 0 else ""
+        result = f", outcomes={dict(outcomes[feed])}" if feed in outcomes else ""
+        print(f"  {feed:<32} read={total:>3} eligible={eligible:>3} selected={selected_counts[feed]:>3} "
+              f"rejected={rejected or {}}{result}{flag}")
     off = Counter(it["domain"] for it in items if aa.reject_reason(it, need_snippet=False) == "off_target")
     if off:
         print("most common off-target domains (add an outlet to TARGETS in api_audit.py if one belongs):")
@@ -364,25 +375,28 @@ def run(args, collector=None):
     if manual:
         items = manual
         rows, skipped = manual_rows(manual, seen_urls, now)
+        feed_stats = None
     else:
         print(f"reading feeds from {args.feeds}...")
         items = aa.fetch_rss(args.feeds, limit=args.max_per_feed)
-        stats = {}
-        rows, skipped = new_rows(items, seen_urls, seen_titles, now, stats)
-        print_feed_report(stats, items)
+        feed_stats = {name: Counter() for name, _ in aa.read_feed_list(args.feeds)}
+        rows, skipped = new_rows(items, seen_urls, seen_titles, now, feed_stats)
+    if args.limit:
+        rows = interleave(rows)[:args.limit]
     if args.no_fetch:
+        if feed_stats is not None:
+            print_feed_report(feed_stats, items, selected=rows)
         print(f"\ndry run: {len(items)} items, {len(rows)} would be collected; nothing fetched or written")
         print("skipped before fetching:", dict(skipped))
         return []
-    if args.limit:
-        rows = interleave(rows)[:args.limit]
     collector = collector or Collector(delay=args.delay, max_failures=args.max_failures)
     out_path = out_dir / f"{datetime.now().strftime('%Y-%m-%d')}.jsonl"
-    written, retry_later = [], []
+    written, retry_later, processed = [], [], []
     try:
         with open(out_path, "a", encoding="utf-8") as f:
             for i, row in enumerate(rows, 1):
                 collector.process(row)
+                processed.append(row)
                 if is_transient(row):
                     retry_later.append(row)
                 else:
@@ -396,6 +410,8 @@ def run(args, collector=None):
     print(f"\nitems read: {len(items)}; rows written: {len(written)} to {out_path}")
     print("skipped before fetching:", dict(skipped))
     print("lede status:", dict(Counter(r["lede_status"] for r in written)))
+    if feed_stats is not None:
+        print_feed_report(feed_stats, items, selected=rows, results=processed)
     if retry_later:
         print(f"{len(retry_later)} rows hit temporary errors and were NOT saved; the next run retries them")
     by_domain = {}
