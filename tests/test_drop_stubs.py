@@ -4,7 +4,7 @@ import pytest
 
 import drop_stubs as ds
 import make_stubs as ms
-from test_make_stubs import fill, raw_row
+from test_make_stubs import fill, raw_row, write_raw
 
 
 def stub(i):
@@ -79,3 +79,16 @@ def test_output_uses_unix_line_endings(tmp_path):
     write(a1, [stub(1), stub(2)])
     run(tmp_path, "art-0002")
     assert b"\r\n" not in a1.read_bytes()
+
+
+def test_removed_highest_id_is_retired_for_future_allocation(tmp_path):
+    a1 = tmp_path / "annotated" / "art_A1.jsonl"
+    write(a1, [stub(1), stub(2), stub(3)])
+    assert run(tmp_path, "art-0003") == 0
+    ledger = tmp_path / "annotated" / "retired_ids.txt"
+    assert ledger.read_text(encoding="utf-8").splitlines() == ["art-0003"]
+
+    write_raw(tmp_path, [raw_row(4), raw_row(5)])
+    made = ms.main(["--raw-dir", str(tmp_path / "raw"), "--annotated-dir", str(tmp_path / "annotated"),
+                    "--gold-dir", str(tmp_path / "gold"), "--annotator", "A1", "--n", "1"])
+    assert [row["id"] for row in made] == ["art-0004"]

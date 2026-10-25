@@ -53,6 +53,15 @@ def write_lf(path, rows):
     os.replace(tmp, path)
 
 
+def reserve_ids(path, ids):
+    """Persist removed ids before deleting rows so they can never be allocated again."""
+    path = Path(path)
+    existing = set(path.read_text(encoding="utf-8").splitlines()) if path.exists() else set()
+    updated = sorted(existing | set(ids))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(f"{rid}\n" for rid in updated), encoding="utf-8", newline="\n")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("ids", nargs="+", help="entry ids such as art-0008")
@@ -65,6 +74,8 @@ def main(argv=None):
     kept, removed, refusals = plan(args.annotated_dir, wanted, gold_ids, args.force)
     for msg in refusals:
         print(f"not removed: {msg}")
+    if removed:
+        reserve_ids(Path(args.annotated_dir) / "retired_ids.txt", removed)
     for path, rows in kept.items():
         write_lf(path, rows)
         print(f"updated {path} ({len(rows)} rows left)")

@@ -69,6 +69,12 @@ def mutate(path, value):
     (["retrieved_at"], "yesterday", "UTC timestamp"),
     (["article_type"], "editorial", "article_type must be one of"),
     (["split"], "train", "split must be one of"),
+    (["syndicated"], "true", "syndicated must be a boolean"),
+    (["syndicated"], 1, "syndicated must be a boolean"),
+    (["in_guideline"], "false", "in_guideline must be a boolean"),
+    (["pilot"], 0, "pilot must be a boolean"),
+    (["overlap_set"], "false", "overlap_set must be a boolean"),
+    (["url"], "https://food.ndtv.com/story", "url host must be an exact target domain"),
     (["original_source"], "", "needs original_source"),
     (["pilot"], True, "standfirst_sufficient"),
     (["labels", "political", "label"], "Centre", "label must be one of"),
@@ -87,6 +93,13 @@ def mutate(path, value):
 ])
 def test_invalid_rows_are_rejected(path, value, fragment):
     assert any(fragment in e for e in errors(mutate(path, value))), errors(mutate(path, value))
+
+
+@pytest.mark.parametrize("host", ["food.ndtv.com", "sports.ndtv.com"])
+def test_off_target_subdomains_are_rejected(host):
+    row = base_row()
+    row["url"] = f"https://{host}/story"
+    assert any("url host must be an exact target domain" in e for e in errors(row))
 
 
 def test_guideline_and_pilot_items_cannot_sit_in_eval():

@@ -95,7 +95,7 @@ Notes on those commands:
 - `--pick URL` on `make_stubs.py` turns a specific collected article into a stub instead of sampling.
 - `--clone` copies the first annotator's overlap rows into the second annotator's file. Only the text and the article facts are copied, never any labels, so both of you label identical text. Run it right after the first annotator's stubs exist.
 - `make_stubs.py` limits how many stories about one event it samples (`--per-event-cap`, default 2, counting entries that already exist). It compares the names in headlines and opening paragraphs, and counts rarer names for more, so "Tiger Shroff" links stories while "Modi" alone does not. This is a review aid with a high threshold, not proof. After each run it lists pairs that look like the same story. Tag a deliberate group with `--event tiger-attack-2026-10`.
-- To remove a stub (a recipe page, a third story about one event) run `python scripts/drop_stubs.py art-0008`. It edits every file in `data/annotated/`, refuses an id that is already in gold, and needs no quoting, so it works the same in PowerShell, Git Bash and cmd. Ids are never reused, so a gap in the numbering is normal.
+- To remove a stub (a recipe page, a third story about one event) run `python scripts/drop_stubs.py art-0008`. It edits every file in `data/annotated/`, refuses an id that is already in gold, and records removed ids in `data/annotated/retired_ids.txt` so they are never reused. It needs no quoting, so it works the same in PowerShell, Git Bash and cmd. A gap in the numbering is normal.
 - Pilot items (`--pilot`) also ask whether the standfirst alone would have given the same label. This tells us whether the platform can skip fetching article pages.
 
 ## The annotator's steps

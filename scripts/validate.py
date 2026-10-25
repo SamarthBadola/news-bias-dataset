@@ -25,6 +25,7 @@ import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+import api_audit as aa
 from urlnorm import canonical
 
 REQUIRED = ["id", "url", "url_archive", "retrieved_at", "published", "outlet",
@@ -66,10 +67,18 @@ def check_row(n, row):
     for key in REQUIRED:
         if key not in row:
             add(f"missing field '{key}'")
+    for key in ("syndicated", "in_guideline", "pilot"):
+        if key in row and not isinstance(row[key], bool):
+            add(f"{key} must be a boolean")
+    if "overlap_set" in row and not isinstance(row["overlap_set"], bool):
+        add("overlap_set must be a boolean")
     for path in find_placeholders(row):
         add(f"'{path}' is still a placeholder")
     if not re.fullmatch(r"art-\d{4}", str(row.get("id", ""))):
         add("id must look like art-0001")
+    url = row.get("url")
+    if isinstance(url, str) and url and not aa.is_target(aa.domain_of(url)):
+        add("url host must be an exact target domain")
     try:
         date.fromisoformat(str(row.get("published", "")))
     except ValueError:
