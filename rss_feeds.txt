@@ -14,6 +14,7 @@
 # description (Indian Express, some Times of India feeds) no longer matters.
 
 # ---- WORKED / VERIFIED
+# NDTV Latest is broad; exact-host guards in make_stubs.py and validate.py exclude food.ndtv.com and sports.ndtv.com.
 NDTV Latest | https://feeds.feedburner.com/NDTV-LatestNews
 Hindustan Times Latest | https://www.hindustantimes.com/feeds/rss/latest/rssfeed.xml
 India Today Home | https://www.indiatoday.in/rss/home
