@@ -102,9 +102,15 @@ def read_raw(raw_dir):
 
 
 def scan_taken(*dirs):
-    """Highest art id used, plus the URLs and lede hashes already taken, across annotated and gold files."""
+    """Highest art id used or retired, plus taken URLs and hashes across annotated and gold files."""
     top, urls, hashes, rows = 0, set(), set(), []
     for d in dirs:
+        retired = Path(d) / "retired_ids.txt"
+        if retired.is_file():
+            for line in retired.read_text(encoding="utf-8").splitlines():
+                m = re.fullmatch(r"art-(\d{4})", line.strip())
+                if m:
+                    top = max(top, int(m.group(1)))
         for path in sorted(Path(d).glob("*.jsonl")):
             for row in read_jsonl(path):
                 rows.append(row)
@@ -116,7 +122,7 @@ def scan_taken(*dirs):
 
 
 def select(rows, n, seed, domain_cap, domains, since, taken_urls, taken_hashes, guard=None):
-    pool = [r for r in rows if r.get("lede_status") == "ok" and r.get("lede")]
+    pool = [r for r in rows if r.get("lede_status") == "ok" and r.get("lede") and aa.is_target(r.get("domain", ""))]
     if domains:
         pool = [r for r in pool if r["domain"] in domains]
     if since:
@@ -153,6 +159,8 @@ def pick(rows, urls, taken_urls):
             print(f"  skipped (already has an entry): {u}")
         elif row is None:
             print(f"  not in raw (run collect.py --url first): {u}")
+        elif not aa.is_target(row.get("domain") or aa.domain_of(row.get("url", ""))):
+            print(f"  skipped (off-target domain {row.get('domain', '')}): {u}")
         elif row.get("lede_status") != "ok":
             print(f"  skipped (lede_status is {row.get('lede_status')}): {u}")
         else:

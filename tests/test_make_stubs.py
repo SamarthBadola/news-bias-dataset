@@ -119,6 +119,19 @@ def test_select_respects_domain_cap_filters_and_is_deterministic():
     assert all(r["published_utc"][:10] >= "2026-10-01" for r in ms.select(rows, 20, 0, 0, set(), "2026-10-01", set(), set()))
 
 
+def test_select_and_pick_skip_off_target_subdomains(tmp_path, capsys):
+    rows = [raw_row(1), raw_row(2, domain="food.ndtv.com"), raw_row(3, domain="sports.ndtv.com")]
+    chosen = ms.select(rows, 10, 0, 0, set(), None, set(), set())
+    assert [r["domain"] for r in chosen] == ["thehindu.com"]
+
+    write_raw(tmp_path, rows)
+    picked = cli(tmp_path, "--annotator", "A1", "--pick", rows[1]["url"], "--pick", rows[2]["url"])
+    assert picked == []
+    out = capsys.readouterr().out
+    assert "skipped (off-target domain food.ndtv.com)" in out
+    assert "skipped (off-target domain sports.ndtv.com)" in out
+
+
 def test_cli_assigns_sequential_ids_and_never_reuses_them(tmp_path):
     write_raw(tmp_path, [raw_row(i, domain=d) for i, d in enumerate(["thehindu.com", "ndtv.com", "scroll.in", "theprint.in"])])
     first = cli(tmp_path, "--annotator", "A1", "--n", "2", "--per-domain-cap", "0")
