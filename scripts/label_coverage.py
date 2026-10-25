@@ -8,7 +8,6 @@ The default floor is an operational coverage goal for a small course project, no
 import argparse
 import json
 from collections import Counter
-from pathlib import Path
 
 
 CLASSES = {
