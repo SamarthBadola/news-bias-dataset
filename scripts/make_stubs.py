@@ -27,7 +27,9 @@ import api_audit as aa
 from urlnorm import canonical
 
 GUIDELINE_VERSION = "1.1"
-DOMAIN_NAMES = {domain: name for name, domain in aa.TARGETS.items()}
+def outlet_name(domain):
+    """Display name for a host, read from the live outlet list."""
+    return {d: n for n, d in aa.TARGETS.items()}.get(domain, domain)
 TO_CONFIRM = "<true|false>"
 
 
@@ -160,7 +162,7 @@ def pick(rows, urls, taken_urls):
         elif row is None:
             print(f"  not in raw (run collect.py --url first): {u}")
         elif not aa.is_target(row.get("domain") or aa.domain_of(row.get("url", ""))):
-            print(f"  skipped (off-target domain {row.get('domain', '')}): {u}")
+            print(f"  skipped (off-target domain {row.get('domain', '')}): {u}\n        to allow this outlet: python scripts/outlets.py add \"NAME\" {u}")
         elif row.get("lede_status") != "ok":
             print(f"  skipped (lede_status is {row.get('lede_status')}): {u}")
         else:
@@ -194,7 +196,7 @@ def make_stub(raw, art_id, annotator, pilot, overlap, guideline_version=GUIDELIN
         "url_archive": "",
         "retrieved_at": raw["retrieved_at"],
         "published": (raw.get("published_utc") or "")[:10] or "<YYYY-MM-DD>",
-        "outlet": DOMAIN_NAMES.get(raw["domain"], raw["domain"]),
+        "outlet": outlet_name(raw["domain"]),
         "original_source": original_source,
         "syndicated": syndicated,
         "article_type": "opinion" if raw.get("type_hint") == "opinion" else "<news|wire|analysis|opinion>",
