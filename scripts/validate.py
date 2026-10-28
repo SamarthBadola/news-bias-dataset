@@ -78,7 +78,7 @@ def check_row(n, row):
         add("id must look like art-0001")
     url = row.get("url")
     if isinstance(url, str) and url and not aa.is_target(aa.domain_of(url)):
-        add("url host must be an exact target domain")
+        add("url host must be an exact target domain (allow the outlet with: python scripts/outlets.py add NAME URL)")
     try:
         date.fromisoformat(str(row.get("published", "")))
     except ValueError:

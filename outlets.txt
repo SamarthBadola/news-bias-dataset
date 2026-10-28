@@ -1,0 +1,34 @@
+# Outlets whose articles the collector, stub generator and validator accept.
+# One per line: Name | host. The host must match the article URL exactly, without www,
+# so food.ndtv.com and sports.ndtv.com are not covered by ndtv.com. List a subdomain on its own line when it is wanted.
+#
+# Add an outlet with:  python scripts/outlets.py add "Newslaundry" https://www.newslaundry.com/some/article
+# Commit outlets.txt in its own commit (chore: allow Newslaundry articles) so the change is reviewed.
+NDTV | ndtv.com
+ThePrint | theprint.in
+The Hindu | thehindu.com
+Indian Express | indianexpress.com
+Times of India | timesofindia.indiatimes.com
+Hindustan Times | hindustantimes.com
+India Today | indiatoday.in
+News18 | news18.com
+ANI | aninews.in
+Republic | republicworld.com
+Scroll | scroll.in
+The Wire | thewire.in
+OpIndia | opindia.com
+Firstpost | firstpost.com
+Deccan Herald | deccanherald.com
+Business Standard | business-standard.com
+Times Now | timesnownews.com
+ABP News | news.abplive.com
+India TV | indiatvnews.com
+DNA India | dnaindia.com
+Oneindia | oneindia.com
+Free Press Journal | freepressjournal.in
+Telangana Today | telanganatoday.com
+Frontline | frontline.thehindu.com
+The Quint | thequint.com
+National Herald | nationalheraldindia.com
+Organiser | organiser.org
+TFIPOST | tfipost.com

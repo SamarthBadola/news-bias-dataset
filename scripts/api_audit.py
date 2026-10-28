@@ -10,7 +10,7 @@ Real environment variables take priority over the .env file.
 
 Every row is tagged with the ingestion filter it would fail (reject_reason), so the
 report shows how much of each source is usable. Nothing is dropped from the CSV.
-Edit TARGETS to match the outlets you want to cover.
+The allowed outlets live in outlets.txt (see scripts/outlets.py).
 """
 import argparse
 import csv
@@ -27,6 +27,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
+import outlets
 import safe_fetch
 
 try:
@@ -35,37 +36,17 @@ except ImportError:  # feeds are untrusted input; install defusedxml to block en
     from xml.etree import ElementTree as ET
     print("warning: defusedxml is not installed; run pip install -r requirements.txt")
 
-TARGETS = {
-    "NDTV": "ndtv.com",
-    "ThePrint": "theprint.in",
-    "The Hindu": "thehindu.com",
-    "Indian Express": "indianexpress.com",
-    "Times of India": "timesofindia.indiatimes.com",
-    "Hindustan Times": "hindustantimes.com",
-    "India Today": "indiatoday.in",
-    "News18": "news18.com",
-    "ANI": "aninews.in",
-    "Republic": "republicworld.com",
-    "Scroll": "scroll.in",
-    "The Wire": "thewire.in",
-    "OpIndia": "opindia.com",
-    "Firstpost": "firstpost.com",
-    "Deccan Herald": "deccanherald.com",
-    "Business Standard": "business-standard.com",
-    "Times Now": "timesnownews.com",
-    "ABP News": "news.abplive.com",
-    "India TV": "indiatvnews.com",
-    "DNA India": "dnaindia.com",
-    "Oneindia": "oneindia.com",
-    "Free Press Journal": "freepressjournal.in",
-    "Telangana Today": "telanganatoday.com",
-    "Frontline": "frontline.thehindu.com",
-    "The Quint": "thequint.com",
-    "National Herald": "nationalheraldindia.com",
-    "Organiser": "organiser.org",
-    "TFIPOST": "tfipost.com",
-}
+TARGETS = outlets.load()
 TARGET_DOMAINS = set(TARGETS.values())
+
+
+def reload_targets(path=outlets.DEFAULT_PATH):
+    """Re-read outlets.txt (or another file) into TARGETS and TARGET_DOMAINS."""
+    global TARGETS, TARGET_DOMAINS
+    TARGETS = outlets.load(path)
+    TARGET_DOMAINS = set(TARGETS.values())
+
+
 BLOCKED_DOMAINS = {"news.google.com", "menafn.com", "einpresswire.com", "prnewswire.com",
                    "globenewswire.com", "businesswire.com"}
 SPORT_HINTS = re.compile(r"cricket|espn|sportskeeda|/sports?/|\bipl\b", re.I)

@@ -337,7 +337,7 @@ def print_feed_report(stats, items, selected=None, results=None):
               f"rejected={rejected or {}}{result}{flag}")
     off = Counter(it["domain"] for it in items if aa.reject_reason(it, need_snippet=False) == "off_target")
     if off:
-        print("most common off-target domains (add an outlet to TARGETS in api_audit.py if one belongs):")
+        print("most common off-target domains (if one belongs, allow it with: python scripts/outlets.py add NAME URL):")
         for domain, n in off.most_common(8):
             print(f"  {domain}: {n}")
 

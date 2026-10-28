@@ -67,6 +67,7 @@ The collector needs no API keys. Only `scripts/api_audit.py` reads keys, from a 
 
 1. **Stay blind on axes 1 and 2.** Label from the headline and the opening paragraphs shown in Label Studio. Do not open the stub file in an editor while you label, and do not open the article. The URL and the outlet name are in the stub file on purpose, and seeing them would let reputation decide the label.
 2. **Label alone.** Use your own Label Studio project. Do not discuss labels with the other annotator until both of you have finished the overlap rows.
+3. **Keep finished labels off `main` until both annotators are done.** Push your labeled file on its own branch and open the pull request, but do not merge it. The maintainer merges both annotators' files together, so neither of you can read the other's labels before labeling the same articles. Never open the other annotator's file.
 
 ## The maintainer's steps
 
@@ -89,7 +90,7 @@ git add data && git commit -m "data: add stubs for the pilot batch" && git push
 Notes on those commands:
 
 - `collect.py` reads robots.txt, spaces out its requests and retries temporary errors. It does not get around blocks or paywalls. A page it cannot read is saved with a status such as `robots_blocked` and is not annotated.
-- `--no-fetch` shows what a run would collect and writes nothing. It applies `--limit` and prints the per-feed funnel. A feed marked `<-- check this feed` returned nothing usable, so look at the list of off-target domains printed below it. If an outlet in that list belongs in the dataset, add its domain to `TARGETS` in `scripts/api_audit.py`.
+- `--no-fetch` shows what a run would collect and writes nothing. It applies `--limit` and prints the per-feed funnel. A feed marked `<-- check this feed` returned nothing usable, so look at the list of off-target domains printed below it. If an outlet in that list belongs in the dataset, allow it with `python scripts/outlets.py add "Name" https://example.com/an-article` and commit `outlets.txt` in its own `chore:` commit. The same command is how you allow an article from an outlet outside the feed list, for example a comparison-bundle article collected with `collect.py --url`.
 - A feed that fails prints the reason, for example `network_error: ConnectionResetError`. Occasional failures are normal. A feed that fails every time usually means the site refuses automated clients. Leave such a site out instead of working around it.
 - `--split` sets where finished entries land in gold: `eval` (the default) or `fewshot`. Pilot batches always go to `pilot`.
 - `--pick URL` on `make_stubs.py` turns a specific collected article into a stub instead of sampling.
@@ -106,7 +107,9 @@ Replace `A1` with your own id throughout.
 2. **Build your task file.** It contains only an id, the headline and the opening paragraphs, shuffled in your own order.
    ```bash
    python scripts/ls_tasks.py --stubs data/annotated/art_A1.jsonl --out labelstudio/A1_tasks.json
+   python scripts/check_batch.py tasks --stubs data/annotated/art_A1.jsonl --tasks labelstudio/A1_tasks.json
    ```
+   The check must show `0 error(s)`. It confirms the task file matches your unlabeled stubs exactly and that no URL or domain appears in the text. A warning that an outlet name appears in the text means a quote or a reference names the outlet. Tell the maintainer, who can swap that article out with `drop_stubs.py`.
 3. **Set up Label Studio** (first time only). Start the Docker container and open http://localhost:8080. Create a project, then in its labeling setup choose a custom template, open the code view and paste the contents of `labelstudio/config.xml`. Menu names can differ slightly between Label Studio versions.
 4. **Import** `labelstudio/A1_tasks.json` into the project.
 5. **Label each task.** Follow the guideline.
@@ -114,8 +117,9 @@ Replace `A1` with your own id throughout.
    - Pick the article type, the label and a confidence for each axis, and write a one-line rationale.
    - On pilot items, also answer the standfirst question.
 6. **Export** from Label Studio in the full **JSON** format (not JSON-MIN or CSV). Your browser saves a file with a long generated name. Move it into the repo and rename it `labelstudio/A1_export.json`.
-7. **Bring the labels back into your file.**
+7. **Check the export, then bring the labels back into your file.**
    ```bash
+   python scripts/check_batch.py export --stubs data/annotated/art_A1.jsonl --export labelstudio/A1_export.json
    python scripts/ls_import.py --export labelstudio/A1_export.json --stubs data/annotated/art_A1.jsonl --comparative not_applicable
    ```
    The `--comparative` option marks the communal/caste and cultural axes as not applicable. Use it only when none of your articles belongs to a comparison bundle (see the notes at the end). The script lists any task it could not use, for example a missing rationale or a highlighted phrase it could not find. Fix those in Label Studio, export again and rerun. A row that already has labels is skipped unless you add `--overwrite`.
@@ -186,6 +190,10 @@ Use the conventional prefixes:
 | `... are the same article URL` | Two different ids point at one article (links that differ only by tracking parameters count as the same). Keep one with `drop_stubs.py`. |
 | `... are the same story text` | Two entries have the same opening words, which usually means one wire story on two outlets. Keep one. |
 | A multi-line command pasted into PowerShell fails | PowerShell does not accept bash-style `<<EOF` blocks. Use the scripts in `scripts/`; they take plain arguments. |
+| `ERROR: ... looks like JSON-MIN or CSV` | The export is in the wrong format. Export again as plain JSON. |
+| `ERROR: ... is not in this stub file` | The export belongs to another annotator or another batch. Use your own project's export. |
+| `warning: ... labeled in under 5 seconds` | Reread those tasks. A rushed label is cheaper to fix now than after promotion. |
+| `warning: ... is N of N labels` | Nearly every task got one label. That can be real, but check that it is not a habit. |
 | `trafilatura is not installed` | Run `pip install -r requirements.txt` inside your virtual environment. |
 
 ## Known gaps
