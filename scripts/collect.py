@@ -12,10 +12,6 @@ Usage:
     python scripts/collect.py --url https://example.com/a-story   # one-off article that is not in any feed
     python scripts/collect.py --urls-file my_urls.txt             # many one-offs, one URL per line
 
-Fetching rules: robots.txt is honoured (including Crawl-delay), requests to one domain are spaced out,
-transient errors are retried, and a domain that keeps failing is skipped for the rest of the run.
-Nothing here evades blocks: no robots.txt override, no paywall workaround, no proxy rotation.
-A page that cannot be fetched gets a status and is excluded from annotation.
 
 Lede rule (also in the annotation guideline): the first two body paragraphs after boilerplate
 and dateline removal, cut to 120 words at the last full sentence if that keeps at least 60 words,
@@ -50,7 +46,7 @@ BOILER_LINE = re.compile(
 BYLINE = re.compile(r"^(by|written by|edited by)\s", re.I)
 AGENCY_TAG = r"\((?:PTI|ANI|IANS|Reuters|AFP|UNI)\)"
 CITIES = ("New Delhi|Delhi|Mumbai|Kolkata|Chennai|Bengaluru|Bangalore|Hyderabad|Lucknow|Patna|Chandigarh|"
-          "Jaipur|Bhopal|Guwahati|Srinagar|Thiruvananthapuram|Washington|London|Beijing|Dubai")
+          "Jaipur|Bhopal|Guwahati|Srinagar|Thiruvananthapuram")
 DATE_PART = r"(?:,\s*[A-Za-z]{3,9}\.?\s*\d{1,2})?"
 DATELINES = [
     re.compile(rf"^\s*[A-Za-z. ]{{2,30}}{DATE_PART}\s*{AGENCY_TAG}\s*(?::|—|–|-)?\s*"),
@@ -278,6 +274,24 @@ def load_seen(out_dir):
     return urls, titles
 
 
+def load_latest_statuses(out_dir):
+    """Return the most recent collection status for each canonical URL."""
+    statuses = {}
+    for path in sorted(Path(out_dir).glob("*.jsonl")):
+        with open(path, encoding="utf-8-sig") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                url = row.get("canonical_url", "")
+                if url:
+                    statuses[url] = row.get("lede_status", "")
+    return statuses
+
+
 def new_rows(items, seen_urls, seen_titles, now, stats=None):
     """Rows worth fetching. If a dict is passed as stats it is filled with per-feed outcome counts."""
     rows, skipped = [], Counter()
@@ -342,12 +356,13 @@ def print_feed_report(stats, items, selected=None, results=None):
             print(f"  {domain}: {n}")
 
 
-def manual_rows(urls, seen_urls, now):
+def manual_rows(urls, seen_urls, now, retry_urls=None):
     """Rows for articles chosen by hand. No feed filters apply; the fetch guards and robots.txt still do."""
+    retry_urls = retry_urls or set()
     rows, skipped = [], Counter()
     for url in urls:
         cu = canonical(url)
-        if cu in seen_urls:
+        if cu in seen_urls and cu not in retry_urls:
             skipped["duplicate"] += 1
             continue
         seen_urls.add(cu)
@@ -369,12 +384,18 @@ def run(args, collector=None):
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     seen_urls, seen_titles = load_seen(out_dir)
+    latest_statuses = load_latest_statuses(out_dir)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     urls_file = getattr(args, "urls_file", None)
     manual = list(getattr(args, "url", None) or []) + (read_url_list(urls_file) if urls_file else [])
     if manual:
         items = manual
-        rows, skipped = manual_rows(manual, seen_urls, now)
+        retry_blocked = getattr(args, "retry_robots_blocked", False)
+        retry_urls = {
+            canonical(url) for url in manual
+            if retry_blocked and latest_statuses.get(canonical(url)) == "robots_blocked"
+        }
+        rows, skipped = manual_rows(manual, seen_urls, now, retry_urls=retry_urls)
         feed_stats = None
     else:
         print(f"reading feeds from {args.feeds}...")
@@ -427,6 +448,8 @@ def main():
     ap.add_argument("--feeds", default="rss_feeds.txt")
     ap.add_argument("--url", action="append", help="collect this one article instead of reading feeds; repeatable")
     ap.add_argument("--urls-file", help="file with one article URL per line, collected instead of reading feeds")
+    ap.add_argument("--retry-robots-blocked", action="store_true",
+                    help="retry explicitly selected URLs whose latest raw status is robots_blocked; robots.txt is checked again")
     ap.add_argument("--out-dir", default="data/raw")
     ap.add_argument("--max-per-feed", type=int, default=30)
     ap.add_argument("--delay", type=float, default=1.0, help="seconds between requests to one domain")
