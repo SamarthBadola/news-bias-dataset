@@ -1,12 +1,12 @@
 # Annotation Guideline — News Bias & Fake News Detection Platform
 
-Version 1.1. This is a living document. Any disagreement during labeling that the guideline doesn't resolve should be written up and folded back in, not silently decided by one annotator.
+Version 1.4. This is a living document. Any ambiguity that the guideline doesn't resolve should be recorded and folded back in, rather than silently decided.
 
 ---
 
 ## 1. Purpose and Scope
 
-This guideline governs manual labeling for four bias axes: political ideology, gender bias, communal & caste bias, and cultural bias. Two annotators will label roughly 40-50 examples for each of political ideology and gender bias. This set is held out purely for evaluation, since those classifiers are trained through weak supervision. Communal/caste and cultural bias need fewer examples, because an LLM classifies them from a small number of few-shot exemplars. Their labeled bundles are split between those exemplars and an evaluation portion, and the target count is agreed before labeling starts.
+This guideline governs manual labeling for four bias axes: political ideology, gender bias, communal & caste bias, and cultural bias. The current political and gender corpus has 165 examples labeled by A1 and is intended for fine-tuning and model evaluation. Because the class counts are small and imbalanced, evaluation uses five-fold cross-validation rather than a permanent train/validation/evaluation split; see [`finetuning-handover.md`](finetuning-handover.md). The communal/caste and cultural axes are comparative and are not fine-tuning targets in this corpus; they require matched article bundles for the project's few-shot workflow.
 
 Every label needs a one-line rationale attached. A label without a rationale is not a finished label, it's a guess with a category attached to it.
 
@@ -16,7 +16,7 @@ Every label needs a one-line rationale attached. A label without a rationale is 
 
 Political ideology and gender bias are labeled at the **single-article level**. The bias, if present, is visible in the article on its own.
 
-Communal & caste bias and cultural bias are labeled at the **case bundle level**: a group of two or more articles covering comparable events or practices, where at least one dimension (community, caste, country of origin) differs between them. Neither of these two biases is reliably visible from one article read in isolation, since the definition itself is comparative. Labeling a single article on these axes means relying on an annotator's private memory of "what similar cases usually look like," which is not reproducible and won't survive scrutiny. A bundle, with the comparison written out, is something a second annotator can check.
+Communal & caste bias and cultural bias are labeled at the **case bundle level**: a group of two or more articles covering comparable events or practices, where at least one dimension (community, caste, country of origin) differs between them. Neither of these two biases is reliably visible from one article read in isolation, since the definition itself is comparative. Labeling a single article on these axes means relying on private memory of "what similar cases usually look like," which is not reproducible and won't survive scrutiny. A bundle, with the comparison written out, makes the evidence reviewable.
 
 ### 2a. What the annotator reads
 
@@ -33,9 +33,9 @@ Communal & caste bias and cultural bias are labeled at the **case bundle level**
 
 **Opinion pieces are in scope.** Opinion is news too, and columnists present nuanced views. Every row carries an `article_type` (news, wire, analysis or opinion), so results can be reported per type.
 
-**Syndicated copy.** When a wire agency wrote the body, record `original_source` and set `syndicated` to true. Annotators label the text in front of them, not the republishing outlet, and weak labels derived from the outlet are unreliable for these rows.
+**Syndicated copy.** When a wire agency wrote the body, record `original_source` and set `syndicated` to true. Label the text in front of you, not the republishing outlet; weak labels derived from the outlet are unreliable for these rows.
 
-**Pilot check.** During the pilot batch, annotators also record whether the label would have been the same from the standfirst (the feed description) alone. This measures how much the lede adds over the standfirst.
+**Pilot check.** During the pilot batch, the annotator also records whether the label would have been the same from the standfirst (the feed description) alone. This measures how much the lede adds over the standfirst.
 
 ---
 
@@ -66,11 +66,11 @@ For weak-supervision bootstrapping, [Media Bias Fact Check rates NDTV Left-Cente
 
 **Classes:** Misogynistic / Misandrist / Neutral.
 
-A binary forced choice between misogynistic and misandrist would push every article that has nothing to do with gender into one bucket or the other, and since this axis's manual set is your evaluation set, that would quietly corrupt it. Neutral is a real, expected outcome for most articles, not an escape hatch.
+A binary forced choice between misogynistic and misandrist would push every article that has nothing to do with gender into one bucket or the other, corrupting the labels used for fine-tuning and evaluation. Neutral is a real, expected outcome for most articles, not an escape hatch.
 
 **Definitions:**
 - **Misogynistic:** Coverage that sexualizes, sensationalizes, or judges a woman's appearance or conduct in ways unrelated to the actual news, or that treats a woman's involvement in a story as inherently scandalous.
-- **Misandrist:** Coverage that generalizes an individual man's proven conduct into a claim about men as a category, or that assumes guilt or bad faith based on gender rather than the facts of the case.
+- **Misandrist:** Coverage that generalizes men's conduct or traits into claims about men as a category, attributes guilt or bad faith to men because of gender rather than evidence, or adopts a derogatory gendered trope as if it objectively describes men generally. This can occur in cultural or trend coverage when a headline and lede sanitize a hostile stereotype by presenting it as a neutral or positive account of men's traits or motives.
 - **Neutral:** Straight reporting, regardless of the gender of the people involved.
 
 **Worked examples:**
@@ -78,8 +78,19 @@ A binary forced choice between misogynistic and misandrist would push every arti
 1. *Misogynistic, real:* [Outlook's media critique](https://www.outlookindia.com/national/when-factual-becomes-sensational-misogny-and-titillation-in-reporting-of-women-involved-in-crime) collects headlines run by mainstream Indian outlets on women connected to crime cases: NDTV's "Indrani's Jail Diary: Botox, Affairs, and Daughter's Ghost," Times Now's "Mini-Skirt Sadhvi: Radhe Maa's Bedroom Darshan Scandal!", and Hindustan Times's "Rhea Chakraborty—The Femme Fatale Behind Sushant's Demise?" None of these lead with the legal facts of the case. All three lead with the woman's appearance, personal life, or a sexualized character label.
 2. *Misandrist, real:* [The Mooknayak's coverage](https://en.themooknayak.com/women-news/father-as-natural-guardian-concept-outdated-in-21st-century-india-allahabad-hcs-landmark-custody-verdict-favors-mother) of an Allahabad High Court custody ruling ran under a headline declaring the entire concept of paternal guardianship "outdated" and rooted in patriarchal bias. The court's actual finding was narrow: this specific father had fabricated a story to alienate his daughter from her mother. The headline generalizes that individual, proven finding into a claim about fathers as a category.
 3. *Neutral, real contrast:* A separate Allahabad High Court ruling, on the same statute, [held that a father cannot be denied custody unless shown unfit as a guardian](https://www.deccanherald.com/india/father-cant-be-denied-custody-of-minor-daughter-unless-found-unfit-allahabad-high-court-4126563). Deccan Herald's coverage reported the bench, the holding, and the facts, with no framing in either direction. Same court, same law, opposite outcome, and the difference in coverage tone between example 2 and this one is exactly what this axis is built to catch.
+4. *Misandrist, real:* [Scroll's article on the “performative male” trend](https://scroll.in/article/1088709/) uses a Gen Z term commonly applied derisively to men perceived as feigning sensitivity or particular tastes to attract women. In this headline, “rise” and “rewriting ideas about masculinity,” paired with the lede's description of men who “deliberately craft a soft, sensitive, emotionally aware aesthetic,” recasts that suspicion of bad faith as a broadly descriptive trend. The headline and lede adopt and normalize the gendered generalization rather than merely explaining the slang. Label Misandrist, medium confidence. Highlight the gendered trope in the headline and the quoted description in the lede.
 
-**Exclusions:** Reporting that a specific man or woman lost a case, committed an offense, or made a mistake is not itself biased. The bias is in generalizing an individual's conduct to their entire gender, not in reporting the individual fact.
+### 4a. Gendered tropes and culturally specific terms
+
+Classify how the headline and lede use a gendered term or trope, not the mere appearance of the term. A neutral explanation, attributed quotation, or criticism of a stereotype is not itself biased. A positive gender-bias label requires the coverage to adopt, validate, or normalize a gender-wide generalization. This can happen indirectly: trend coverage may present a derogatory slang premise as an objective description of a gender group's traits or motives, even when its tone sounds approving.
+
+Terms can have culturally specific or evolving meanings. Use shared project notes or reliable context; do not rely on private knowledge or on assumptions about an outlet. If the meaning or the article's stance remains unclear, lower confidence and record the case for guideline review rather than treating the term alone as proof of bias. Apply the same standard across genders.
+
+**Reaction is not automatically endorsement:** Laughter, applause, attendance, sharing, or participation can be observable reactions, but do not by themselves prove a person's belief, intent, or moral complicity. At the same time, do not treat every reference to such a reaction as biased: coverage may reasonably criticize how a joke was received or what that reception suggests about social norms. Apply a gender-bias label when the headline or lede uses the reaction as unsupported evidence that people are malicious, complicit, or hold the view expressed because they are men or women. This can target a gender-defined subset, such as men at a particular event; it need not accuse every man or woman. Distinguish that inference from criticism of the specific joke or a documented pattern, and apply the same standard across genders.
+
+*Boundary example:* In the supplied headline, “A biryani joke and the men who laughed,” and opening, the writer calls the incident “our national circus of misogyny dressed up as banter” and says the troubling part was “the ease with which it landed.” Label Gender Bias **Misandrist** (medium confidence): read together, the headline identifies the men by their laughter and the opening links that reaction to a broad charge of misogyny, implying complicity from laughter without establishing that each person endorsed the joke's premise. Highlight “the men who laughed,” “our national circus of misogyny dressed up as banter,” and “the ease with which it landed.” This judgment is based on the supplied headline and opening, not material outside that annotation input.
+
+**Exclusions:** Reporting that a specific man or woman lost a case, committed an offense, or made a mistake is not itself biased. Mentioning or criticizing a gendered trope is not itself biased either. Look for the coverage's own framing and whether it generalizes or endorses the trope; when its meaning or stance is uncertain, follow Section 4a's context and confidence guidance.
 
 ---
 
@@ -145,18 +156,18 @@ A binary forced choice between misogynistic and misandrist would push every arti
 
 ## 8. Calibration Exercise
 
-Before labeling independently, a new annotator should review 5-8 pre-labeled examples drawn from this guideline, each with its rationale, and label them again blind. Compare against the guideline's stated label before starting on the real set. Disagreement at this stage means re-reading the relevant section, not adjusting your judgment to match and moving on.
+Before labeling a new batch, A1 should review 5-8 examples drawn from this guideline, hide the stated labels, and label them again. Compare the decisions with the examples' written rationales. Differences are a prompt to check the guideline and record any needed clarification, not to change labels automatically.
 
 ---
 
-## 9. Inter-Annotator Agreement Protocol
+## 9. Single-Annotator Consistency Review
 
-With two annotators, agreement is measured with Cohen's kappa, not raw percent agreement, since percent agreement looks artificially high on any axis where Neutral or Center dominates.
+The current dataset has one annotator, so inter-annotator agreement and Cohen's kappa cannot be estimated. A delayed blind relabel can check consistency over time, but it is not an independent annotation and must not be reported as inter-annotator agreement.
 
-1. Both annotators independently label the same 15-20 article overlap set per axis, without seeing each other's labels.
-2. Calculate Cohen's kappa on the overlap set.
-3. A kappa of 0.6 or above is the threshold to trust the rest of the labels. Below that, don't relabel and hope it improves. Sit down together, find where the disagreements cluster, and revise the guideline itself.
-4. Log every guideline revision with the date and the disagreement that triggered it, in Section 11.
+1. After a delay, select a small sample of labeled items and hide the original labels.
+2. Relabel those items from the same annotation input and guideline.
+3. Compare the new labels with the originals, review differences against the guideline, and record any resulting clarification.
+4. Report this as within-annotator consistency only; do not treat it as independent validation of label correctness.
 
 ---
 
@@ -174,12 +185,12 @@ With two annotators, agreement is measured with Cohen's kappa, not raw percent a
 
 ### Pre-delivery checklist (run once before handing off the full labeled set)
 
-- Every class for every axis has at least two labeled examples
-- Cohen's kappa calculated on the overlap set for each axis
+- Political and gender class counts have been checked with `scripts/label_coverage.py`; `not_applicable` is not counted as class coverage for the comparative axes
+- Any delayed blind relabel review is described as within-annotator consistency, not inter-annotator agreement
 - Any label missing a rationale has been fixed or removed
 - Bundle sourcing recorded for every axis 3 and 4 label
 - Revision log updated with any guideline changes made during labeling
-- No guideline example or pilot item appears in the eval split
+- The fine-tuning evaluation plan uses the five-fold cross-validation protocol in the handover; pilot rows remain included as specified there
 - Pilot batch run and the standfirst-sufficient rate recorded
 
 ---
@@ -190,6 +201,9 @@ With two annotators, agreement is measured with Cohen's kappa, not raw percent a
 |---|---|---|
 | — | Initial version | — |
 | 2026-10-10 | Added Section 2a: headline plus lede as the annotation input, eligibility rules, syndication and opinion handling; revised label volume for the few-shot axes | Platform fetches pages at request time; API and RSS audit showed feed descriptions differ from the lede |
+| 2026-11-13 | Expanded the Misandrist definition and added guidance and an example for gendered slang and trope framing | The “performative male” discussion showed that cultural or trend coverage can normalize a derogatory generalization without describing a legal case |
+| 2026-11-13 | Added guidance to distinguish observed reactions from unsupported inferences of gendered endorsement or collective guilt; classified the biryani-joke boundary example as Misandrist | The headline singles out men by their laughter, while the opening links that reaction to a broad charge of misogyny and implies complicity without establishing individual endorsement |
+| 2026-11-14 | Updated project scope and quality review for the A1-only fine-tuning corpus | The dataset uses five-fold cross-validation and has no independent annotator agreement estimate |
 
 ---
 
@@ -208,6 +222,7 @@ Read the full pieces before labeling against them. The rationale above is a summ
 - [Outlook: "When Factual Becomes Sensational" — gendered crime headlines](https://www.outlookindia.com/national/when-factual-becomes-sensational-misogny-and-titillation-in-reporting-of-women-involved-in-crime)
 - [The Mooknayak: Allahabad HC custody ruling coverage](https://en.themooknayak.com/women-news/father-as-natural-guardian-concept-outdated-in-21st-century-india-allahabad-hcs-landmark-custody-verdict-favors-mother)
 - [Deccan Herald: separate Allahabad HC custody ruling, neutral framing](https://www.deccanherald.com/india/father-cant-be-denied-custody-of-minor-daughter-unless-found-unfit-allahabad-high-court-4126563)
+- [Scroll: “How the rise of the ‘performative male’ is rewriting ideas about masculinity”](https://scroll.in/article/1088709/)
 
 **Communal & caste bias**
 - [Newslaundry: "The Pseudo-Secularism of the Rampur Molestation Coverage"](https://www.newslaundry.com/2017/06/01/the-pseudo-secularism-of-the-rampur-molestation-coverage)
