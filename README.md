@@ -1,8 +1,29 @@
 # News Bias Dataset
 
-This repository holds the data and tools for a hand-labeled evaluation set. The labels measure bias in Indian news headlines and their opening paragraphs across four axes: political ideology, gender bias, communal and caste bias, and cultural bias. The labeling rules are in [`docs/annotation-guideline.md`](docs/annotation-guideline.md). Read it before you label anything.
+This repository contains a manually labeled dataset of Indian news headlines and opening paragraphs for fine-tuning and evaluating classifiers for political and gender bias. The current labeled corpus has 165 A1 rows. Communal/caste and cultural bias are comparative axes handled through few-shot examples, not fine-tuning labels in this corpus. See the [annotation guideline](docs/annotation-guideline.md) and [fine-tuning handover](docs/finetuning-handover.md).
 
 Keep this repository private. It stores short excerpts of articles that belong to their publishers.
+
+## Dataset snapshot
+
+Coverage below is from `python scripts/label_coverage.py data/annotated/art_A1.jsonl`. It includes all 165 labeled rows, including 10 pilot rows (155 are marked `eval`).
+
+| Axis | Class | Rows |
+|---|---|---:|
+| Political | Left | 37 |
+| Political | Center | 100 |
+| Political | Right | 28 |
+| Gender | Misogynistic | 18 |
+| Gender | Misandrist | 18 |
+| Gender | Neutral | 129 |
+| Communal/caste | Not applicable | 165 |
+| Cultural | Not applicable | 165 |
+
+The political and gender classes are imbalanced, especially the two non-neutral gender classes. Gender-focused articles were deliberately sourced to improve coverage, so these counts describe this dataset and must not be interpreted as real-world prevalence.
+
+## How this dataset was created
+
+RSS feeds and targeted article URLs supplied candidates; feeds and article topics did not determine labels. `collect.py` fetched permitted pages, extracted the headline, standfirst and opening paragraphs, and recorded unusable or blocked pages. Candidates were screened for usable text, target outlet domains, duplicates and repeated event coverage before stubs were made. Collection was broadened with targeted URL searches to find more plausible gender-bias examples. A1 labeled the headline and lede in Label Studio, with the outlet and URL hidden, then `ls_import.py` and `validate.py` brought labels into the annotated file and checked required fields, evidence and rationale. The labeling guide shaped the decisions; the labels remain human judgments by one annotator, with no inter-annotator agreement estimate.
 
 ## How an entry travels
 
@@ -11,27 +32,27 @@ RSS feeds ──collect.py──> data/raw/            articles as collected, ne
                               │
                     make_stubs.py (maintainer only)
                               ▼
-                       data/annotated/         one file per annotator, art_A1.jsonl and art_A2.jsonl
+                       data/annotated/         A1's labeled corpus, art_A1.jsonl
                               │
                  ls_tasks.py ─┴─> Label Studio ─> ls_import.py
                               │                   (labeling happens here, outlet hidden)
                               ▼
-                  validate.py --promote        checks every entry, then copies finished ones
+                  validate.py                  checks the A1 file for completeness
                               ▼
-                        data/gold/             eval.jsonl, fewshot.jsonl, pilot.jsonl
+                    five-fold CV                generated during model evaluation
 ```
 
-`gold` and the split names are not two separate destinations. Each gold file is a split, and an entry goes to the file named in its own `split` field. Entries marked as overlap rows reach gold only when both annotators agree, or when they have discussed a disagreement and written down the outcome.
+The current fine-tuning corpus is `data/annotated/art_A1.jsonl`. Cross-validation folds are generated for model work and are not stored as permanent train/validation/evaluation files. Generic gold-promotion tools remain available for other projects, but the active corpus and documented workflow use A1 only.
 
 ## Folders
 
 | Path | What it holds | Who changes it |
 |---|---|---|
 | `data/raw/` | Collected articles, one file per day | Maintainer, through `collect.py` only |
-| `data/annotated/` | Each annotator's working file | Annotators, through the scripts below |
-| `data/gold/` | Finished entries, append-only | `validate.py --promote` only |
+| `data/annotated/` | A1's labeled corpus and retired IDs | A1, through the scripts below |
+| `data/gold/` | Optional promoted splits for workflows that use gold files | `validate.py --promote` only |
 | `scripts/` | The tools | Through pull requests |
-| `labelstudio/` | The Label Studio screen layout (`config.xml`) and temporary task files | Annotators |
+| `labelstudio/` | The Label Studio screen layout (`config.xml`) and temporary task files | A1 |
 | `docs/` | Guideline and an example entry | Through pull requests |
 | `tests/` | Automated tests | Through pull requests |
 
@@ -63,15 +84,15 @@ If you prefer no Docker, `pip install label-studio` in a separate virtual enviro
 
 The collector needs no API keys. Only `scripts/api_audit.py` reads keys, from a local `.env` file (copy `.env.example`). Never commit `.env`.
 
-## Two rules that protect the labels
+## Rules that protect the labels
 
 1. **Stay blind on axes 1 and 2.** Label from the headline and the opening paragraphs shown in Label Studio. Do not open the stub file in an editor while you label, and do not open the article. The URL and the outlet name are in the stub file on purpose, and seeing them would let reputation decide the label.
-2. **Label alone.** Use your own Label Studio project. Do not discuss labels with the other annotator until both of you have finished the overlap rows.
-3. **Keep finished labels off `main` until both annotators are done.** Push your labeled file on its own branch and open the pull request, but do not merge it. The maintainer merges both annotators' files together, so neither of you can read the other's labels before labeling the same articles. Never open the other annotator's file.
+2. **Use the guideline consistently.** A1 is the sole annotator for the current corpus. Record a rationale and evidence for every label; do not infer a label from an outlet or from why an article was collected.
+3. **Review changes through a pull request.** Keep data edits on a branch and stage only the intended annotation file. There is no second annotator file or inter-annotator agreement result for this corpus.
 
 ## The maintainer's steps
 
-One person runs these. Having one person do it means two annotators never get the same entry id. For candidate pool coverage and class-balance guidance, see [`docs/data-inflow.md`](docs/data-inflow.md).
+The maintainer uses these scripts to collect and prepare candidates. For candidate-pool and class-coverage guidance, see [`docs/data-inflow.md`](docs/data-inflow.md).
 
 ```bash
 git pull
@@ -80,11 +101,9 @@ python scripts/inspect_raw.py --status ok --n 3 # read a few ledes before trusti
 python scripts/inspect_raw.py                   # counts per host and source feed, plus every row that is not ok
 python scripts/collect.py                       # full pull from rss_feeds.txt
 python scripts/collect.py --url https://example.com/a-story    # one article that is not in any feed
-python scripts/make_stubs.py --annotator A1 --n 40 --overlap 20 --pilot
-python scripts/make_stubs.py --annotator A2 --n 20
+python scripts/make_stubs.py --annotator A1 --n 40 --pilot
 python scripts/make_stubs.py --annotator A1 --n 6 --split fewshot   # few-shot exemplars for the LLM axes
-python scripts/make_stubs.py --annotator A2 --clone data/annotated/art_A1.jsonl
-git add data && git commit -m "data: add stubs for the pilot batch" && git push
+git add data/annotated/art_A1.jsonl && git commit -m "data: add A1 stubs for the pilot batch" && git push
 ```
 
 Notes on those commands:
@@ -94,14 +113,14 @@ Notes on those commands:
 - A feed that fails prints the reason, for example `network_error: ConnectionResetError`. Occasional failures are normal. A feed that fails every time usually means the site refuses automated clients. Leave such a site out instead of working around it.
 - `--split` sets where finished entries land in gold: `eval` (the default) or `fewshot`. Pilot batches always go to `pilot`.
 - `--pick URL` on `make_stubs.py` turns a specific collected article into a stub instead of sampling.
-- `--clone` copies the first annotator's overlap rows into the second annotator's file. Only the text and the article facts are copied, never any labels, so both of you label identical text. Run it right after the first annotator's stubs exist.
+- `--clone` remains available for future multi-annotator projects; it is not part of this A1-only corpus workflow.
 - `make_stubs.py` limits how many stories about one event it samples (`--per-event-cap`, default 2, counting entries that already exist). It compares the names in headlines and opening paragraphs, and counts rarer names for more, so "Tiger Shroff" links stories while "Modi" alone does not. This is a review aid with a high threshold, not proof. After each run it lists pairs that look like the same story. Tag a deliberate group with `--event tiger-attack-2026-10`.
 - To remove a stub (a recipe page, a third story about one event) run `python scripts/drop_stubs.py art-0008`. It edits every file in `data/annotated/`, refuses an id that is already in gold, and records removed ids in `data/annotated/retired_ids.txt` so they are never reused. It needs no quoting, so it works the same in PowerShell, Git Bash and cmd. A gap in the numbering is normal.
 - Pilot items (`--pilot`) also ask whether the standfirst alone would have given the same label. This tells us whether the platform can skip fetching article pages.
 
 ## The annotator's steps
 
-Replace `A1` with your own id throughout.
+The current annotator id is `A1`.
 
 1. **Pull.** `git pull`
 2. **Build your task file.** It contains only an id, the headline and the opening paragraphs, shuffled in your own order.
@@ -130,13 +149,9 @@ Replace `A1` with your own id throughout.
    It must end with `0 problems`. Some stubs still contain a `<placeholder>` you must replace by hand. The usual ones are `syndicated` and `original_source`, which appear when an agency name such as PTI or Bloomberg shows up in the text. Check the article page once the labeling is finished and replace them with `true` or `false` and the agency name or an empty string.
 9. **Open a pull request** with your updated `data/annotated/art_A1.jsonl`.
 
-### Promotion to gold (maintainer, after both annotators have pushed)
+### Optional gold promotion
 
-```bash
-git pull
-python scripts/validate.py data/annotated/art_A1.jsonl data/annotated/art_A2.jsonl --promote
-git add data/gold && git commit -m "data: promote the pilot batch to gold" && git push
-```
+For other projects that use gold splits, pass the relevant annotation files to `validate.py --promote`. This generic utility is not the current fine-tuning workflow: the handover reads A1 directly and creates cross-validation folds during training. Rows still marked for overlap may wait for another annotator if promoted; do not use promotion as a substitute for the agreed A1 cross-validation process.
 
 The script promotes nothing unless there are zero problems. After that:
 
@@ -171,7 +186,7 @@ Use the conventional prefixes:
 
 | Prefix | Use for |
 |---|---|
-| `data:` | New or updated data files, such as `data: add art-0041 to art-0060 labels (A2)` |
+| `data:` | New or updated data files, such as `data: add A1 labels for art-0041 to art-0060` |
 | `feat:` | A new script or option |
 | `fix:` | A bug fix or a corrected label, such as `fix(data): correct span in art-0007` |
 | `docs:` | Guideline or README changes |
@@ -183,15 +198,15 @@ Use the conventional prefixes:
 |---|---|
 | `'labels.political.label' is still a placeholder` | The entry has not been labeled yet. Run steps 5 to 7. |
 | `highlighted text not found in title` | The phrase you highlighted spans a line break or was edited. Highlight it again in Label Studio, export and rerun. |
-| `'lede' differs between ...` | The two annotators' files hold different text for the same id. Do not edit either file. Ask the maintainer to run `--clone` again. |
-| `not promoted: ... waiting for the second annotator's file` | An overlap row. Pass both annotators' files to `validate.py`. |
+| `'lede' differs between ...` | Two generic annotator files hold different text for the same id. Compare the stubs and recreate the second file with `--clone` if appropriate. |
+| `not promoted: ... waiting for another annotation` | A generic overlap row needs another annotator's file; this does not apply to the current A1 training workflow. |
 | `nothing promoted: fix the problems above first` | Promotion is all or nothing. Fix every listed problem and rerun. |
 | `lede_status: too_short` on many rows of one outlet | Often a paywall or a page of short briefs. Run `python scripts/inspect_raw.py --status too_short` and open one URL to see which. |
 | `... are the same article URL` | Two different ids point at one article (links that differ only by tracking parameters count as the same). Keep one with `drop_stubs.py`. |
 | `... are the same story text` | Two entries have the same opening words, which usually means one wire story on two outlets. Keep one. |
 | A multi-line command pasted into PowerShell fails | PowerShell does not accept bash-style `<<EOF` blocks. Use the scripts in `scripts/`; they take plain arguments. |
 | `ERROR: ... looks like JSON-MIN or CSV` | The export is in the wrong format. Export again as plain JSON. |
-| `ERROR: ... is not in this stub file` | The export belongs to another annotator or another batch. Use your own project's export. |
+| `ERROR: ... is not in this stub file` | The export belongs to another batch or stub file. Check that it matches `A1_export.json` and the current A1 stubs. |
 | `warning: ... labeled in under 5 seconds` | Reread those tasks. A rushed label is cheaper to fix now than after promotion. |
 | `warning: ... is N of N labels` | Nearly every task got one label. That can be real, but check that it is not a habit. |
 | `trafilatura is not installed` | Run `pip install -r requirements.txt` inside your virtual environment. |
@@ -199,7 +214,7 @@ Use the conventional prefixes:
 ## Known gaps
 
 - **Communal/caste and cultural bias (axes 3 and 4)** compare several articles, and the annotator needs the full article and its URL. The Label Studio screen covers axes 1 and 2 only, so these two axes are not labeled there yet. Until the bundle step exists, `--comparative` records single articles as not applicable.
-- **Agreement statistics** (Cohen's kappa on the overlap rows) are not computed by any script yet.
+- **Single-annotator limitation:** independent annotator agreement cannot be measured for this corpus. A blind relabel of a subset after a delay can check within-annotator consistency, but is not a substitute for inter-annotator agreement.
 - **Checking that a feed works.** Run `python scripts/collect.py --no-fetch` after editing `rss_feeds.txt`. It prints an error for every feed that fails and writes nothing.
 
 ## Tests
