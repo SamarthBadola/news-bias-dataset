@@ -228,6 +228,7 @@ audit_out/
 # Label Studio working files (derived from data/annotated and rebuilt on demand)
 labelstudio/*_tasks.json
 labelstudio/*_export.json
+labelstudio/*export*.json
 
 # Python
 __pycache__/
