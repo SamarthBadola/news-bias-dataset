@@ -6,7 +6,7 @@ Version 1.4. This is a living document. Any ambiguity that the guideline doesn't
 
 ## 1. Purpose and Scope
 
-This guideline governs manual labeling for four bias axes: political ideology, gender bias, communal & caste bias, and cultural bias. The current political and gender corpus has 165 examples labeled by A1 and is intended for fine-tuning and model evaluation. Because the class counts are small and imbalanced, evaluation uses five-fold cross-validation rather than a permanent train/validation/evaluation split; see [`finetuning-handover.md`](finetuning-handover.md). The communal/caste and cultural axes are comparative and are not fine-tuning targets in this corpus; they require matched article bundles for the project's few-shot workflow.
+This guideline governs manual labeling for four bias axes: political ideology, gender bias, communal & caste bias, and cultural bias. The current political and gender corpus has 180 examples labeled by A1 and is intended for fine-tuning and model evaluation. Because the class counts are small and imbalanced, evaluation uses five-fold cross-validation rather than a permanent train/validation/evaluation split; see [`finetuning-handover.md`](finetuning-handover.md). The communal/caste and cultural axes are comparative and are not fine-tuning targets in this corpus; they require matched article bundles for the project's few-shot workflow.
 
 Every label needs a one-line rationale attached. A label without a rationale is not a finished label, it's a guess with a category attached to it.
 

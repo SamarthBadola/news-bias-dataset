@@ -1,23 +1,23 @@
 # News Bias Dataset
 
-This repository contains a manually labeled dataset of Indian news headlines and opening paragraphs for fine-tuning and evaluating classifiers for political and gender bias. The current labeled corpus has 165 A1 rows. Communal/caste and cultural bias are comparative axes handled through few-shot examples, not fine-tuning labels in this corpus. See the [annotation guideline](docs/annotation-guideline.md) and [fine-tuning handover](docs/finetuning-handover.md).
+This repository contains a manually labeled dataset of Indian news headlines and opening paragraphs for fine-tuning and evaluating classifiers for political and gender bias. The current labeled corpus has 180 A1 rows. Communal/caste and cultural bias are comparative axes handled through few-shot examples, not fine-tuning labels in this corpus. See the [annotation guideline](docs/annotation-guideline.md) and [fine-tuning handover](docs/finetuning-handover.md).
 
 Keep this repository private. It stores short excerpts of articles that belong to their publishers.
 
 ## Dataset snapshot
 
-Coverage below is from `python scripts/label_coverage.py data/annotated/art_A1.jsonl`. It includes all 165 labeled rows, including 10 pilot rows (155 are marked `eval`).
+Coverage below is from `python scripts/label_coverage.py data/annotated/art_A1.jsonl`. It includes all 180 labeled rows, including 10 pilot rows (170 are marked `eval`).
 
 | Axis | Class | Rows |
 |---|---|---:|
-| Political | Left | 37 |
-| Political | Center | 100 |
-| Political | Right | 28 |
+| Political | Left | 39 |
+| Political | Center | 107 |
+| Political | Right | 34 |
 | Gender | Misogynistic | 18 |
-| Gender | Misandrist | 18 |
-| Gender | Neutral | 129 |
-| Communal/caste | Not applicable | 165 |
-| Cultural | Not applicable | 165 |
+| Gender | Misandrist | 20 |
+| Gender | Neutral | 142 |
+| Communal/caste | Not applicable | 180 |
+| Cultural | Not applicable | 180 |
 
 The political and gender classes are imbalanced, especially the two non-neutral gender classes. Gender-focused articles were deliberately sourced to improve coverage, so these counts describe this dataset and must not be interpreted as real-world prevalence.
 

@@ -229,6 +229,7 @@ audit_out/
 labelstudio/*_tasks.json
 labelstudio/*_export.json
 labelstudio/*export*.json
+labelstudio/*Export*.json
 
 # Python
 __pycache__/
